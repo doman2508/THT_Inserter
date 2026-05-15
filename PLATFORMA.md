@@ -18,6 +18,18 @@ start_platform.bat
 http://127.0.0.1:8780
 ```
 
+Na serwerze produkcyjnym `start_platform.bat` uruchamia aplikacje na wszystkich interfejsach sieciowych (`0.0.0.0`), dlatego z innych komputerow w sieci LAN aplikacja jest dostepna pod adresem:
+
+```text
+http://192.168.1.10:8780/
+```
+
+Jesli inne komputery nie widza aplikacji, uruchom jednorazowo PowerShell jako administrator na serwerze i dodaj regule firewalla:
+
+```powershell
+New-NetFirewallRule -DisplayName "MSX THT Inserter 8780" -Direction Inbound -Protocol TCP -LocalPort 8780 -Action Allow
+```
+
 ## Co dziala teraz
 
 - centralna baza SQLite,
