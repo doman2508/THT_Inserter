@@ -12,3 +12,8 @@ env/
 *.log
 .DS_Store
 Thumbs.db
+data/
+*.db
+*.sqlite
+*_raport_operatora.csv
+*_raport_operatora.json

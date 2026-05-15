@@ -2,382 +2,1722 @@
 <html lang="pl">
 <head>
     <meta charset="UTF-8">
-    <title>PCB</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ project_name }} - MSX THT Inserter</title>
     <style>
+        :root {
+            --bg: #f4f6f8;
+            --panel: #ffffff;
+            --panel-strong: #eef2f6;
+            --line: #d7dee8;
+            --ink: #17212f;
+            --muted: #607086;
+            --blue: #2364aa;
+            --green: #1f8a5b;
+            --red: #c73535;
+            --amber: #b7791f;
+            --shadow: 0 10px 30px rgba(23, 33, 47, 0.12);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
         body {
-            font-family: Arial, sans-serif;
+            height: 100%;
+        }
+
+        body {
             margin: 0;
-            padding: 0;
+            background: var(--bg);
+            color: var(--ink);
+            font-family: Arial, Helvetica, sans-serif;
+            overflow: hidden;
         }
 
-        #main-container {
-			display: flex;
-			align-items: flex-start;
-			height: calc(100vh - 85px); /* Odejmij wysokość przycisków */
-		}
-
-        #pcb-container {
-			position: relative;
-			flex: 0 0 auto;
-			height: 100%;
-			max-width: 50%; /* Domyślna wartość */
-		}
-
-        #pcb-image {
-		display: block;
-		width: 100%; /* Wypełnia szerokość kontenera */
-		height: auto;
-		/*height: 100%;*/ /* Obraz zajmuje 90% wysokości okna */
-		max-width: 100%;
-		object-fit: contain;
-		}
-		
-        #pcb-canvas {
-			position: absolute;
-			top: 0;
-			left: 0;
-			width: 100%;
-			/*height: 100%;*/
-			height: auto;
-			pointer-events: none;
-		}
-
-		#table-container {
-			flex: 1 1 auto;
-			overflow-y: auto;
-			height: 100%;
-		}
-
-        #component-table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        #component-table th, #component-table td {
-            border: 1px solid #ccc;
-            padding: 8px;
-            text-align: left;
-			vertical-align: top;
-        }
-
-        #component-table th {
-            background-color: #f2f2f2;
-        }
-
-        tr:hover {
-            background-color: #f5f5f5;
-            cursor: pointer;
-        }
-
-        /* Styl dla podświetlonego wiersza tabeli */
-        #component-table tr.highlight {
-            background-color: #ffcccc;
-        }
-
-        #controls {
-            padding: 10px;
-        }
-
-        #controls label {
-            margin-right: 10px;
-            font-size: 16px;
-        }
-
-        #controls input {
-            width: 60px;
-            padding: 5px;
-            font-size: 16px;
-            margin-right: 10px;
+        button,
+        input,
+        textarea {
+            font: inherit;
         }
 
         button {
-            padding: 10px 20px;
-            margin: 5px;
-            font-size: 16px;
-        }
-		
-        #project-name {
-            margin-left: 20px;
-            font-weight: bold;
-            font-size: 16px;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            background: var(--panel);
+            color: var(--ink);
+            min-height: 38px;
+            padding: 8px 12px;
+            cursor: pointer;
         }
 
-        .desygnator-cell {
-			word-break: normal;
-			word-break: break-word; /* Zawijaj tekst, aby nie wychodził poza komórkę */
-			white-space: normal;   /* Pozwala na zawijanie tekstu do wielu linii */
-			overflow: visible;     /* Usuń ograniczenie overflow */
-		}
-		
-		#image-wrapper {
-			position: relative;
-			display: inline-block;
-			height: 100%; /* Dodane */
-		}
-		
+        button:hover {
+            border-color: var(--blue);
+        }
+
+        button.primary {
+            background: var(--green);
+            border-color: var(--green);
+            color: #ffffff;
+            font-weight: 700;
+        }
+
+        button.danger {
+            background: var(--red);
+            border-color: var(--red);
+            color: #ffffff;
+            font-weight: 700;
+        }
+
+        button.warning {
+            background: #fff4db;
+            border-color: #e2bd65;
+            color: #5c3b04;
+            font-weight: 700;
+        }
+
+        button.ghost {
+            background: transparent;
+        }
+
+        button.active {
+            outline: 3px solid rgba(35, 100, 170, 0.24);
+        }
+
+        #app {
+            display: grid;
+            grid-template-rows: auto minmax(0, 1fr);
+            height: 100%;
+        }
+
+        #topbar {
+            display: grid;
+            grid-template-columns: minmax(180px, 0.9fr) minmax(220px, 320px) minmax(420px, 1.4fr) auto;
+            gap: 16px;
+            align-items: center;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--line);
+            background: var(--panel);
+        }
+
+        .project-title {
+            min-width: 0;
+        }
+
+        .project-title strong {
+            display: block;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-size: 18px;
+        }
+
+        .project-title span,
+        .progress-meta,
+        .field-label {
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        .progress-wrap {
+            display: grid;
+            gap: 6px;
+        }
+
+        .progress-line {
+            height: 10px;
+            overflow: hidden;
+            border-radius: 999px;
+            background: var(--panel-strong);
+        }
+
+        #progressFill {
+            width: 0%;
+            height: 100%;
+            background: linear-gradient(90deg, var(--green), var(--blue));
+            transition: width 180ms ease;
+        }
+
+        .top-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: flex-end;
+        }
+
+        .top-actions button.active,
+        .view-controls button.active {
+            background: #eaf2fb;
+            border-color: var(--blue);
+            color: var(--blue);
+            font-weight: 700;
+        }
+
+        #main {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 430px;
+            min-height: 0;
+        }
+
+        body.focus-mode #main {
+            grid-template-columns: minmax(0, 1fr) 360px;
+        }
+
+        #pcbStage {
+            position: relative;
+            min-width: 0;
+            min-height: 0;
+            overflow: auto;
+            background: #dfe5ec;
+        }
+
+        #imageSurface {
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+            min-width: 100%;
+            min-height: 100%;
+            padding: 18px;
+        }
+
+        #imageWrapper {
+            position: relative;
+            width: 100%;
+            max-width: none;
+            background: #ffffff;
+            box-shadow: var(--shadow);
+        }
+
+        #pcb-image {
+            display: none;
+        }
+
+        #pcb-canvas {
+            display: block;
+            width: 100%;
+            height: auto;
+            pointer-events: none;
+        }
+
+        .view-controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .view-controls label {
+            display: inline-flex;
+            gap: 8px;
+            align-items: center;
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        #zoomRange {
+            width: 160px;
+        }
+
+        .rotation-group {
+            display: inline-flex;
+            gap: 4px;
+            align-items: center;
+            padding-left: 4px;
+        }
+
+        .rotation-group span,
+        .marker-group span {
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        .marker-group {
+            display: inline-flex;
+            gap: 4px;
+            align-items: center;
+        }
+
+        .rotation-group button,
+        .marker-group button {
+            min-height: 32px;
+            padding: 5px 8px;
+        }
+
+        #workPanel {
+            display: grid;
+            grid-template-rows: auto auto minmax(0, 1fr);
+            min-width: 0;
+            min-height: 0;
+            border-left: 1px solid var(--line);
+            background: var(--panel);
+        }
+
+        .current-block {
+            display: grid;
+            gap: 14px;
+            padding: 16px;
+            border-bottom: 1px solid var(--line);
+        }
+
+        .step-header {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        #stepBadge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 74px;
+            min-height: 38px;
+            border-radius: 6px;
+            background: var(--panel-strong);
+            font-weight: 700;
+        }
+
+        #stepStatus {
+            border-radius: 999px;
+            padding: 6px 10px;
+            background: var(--panel-strong);
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        #stepStatus.status-done {
+            background: #dff2e8;
+            color: var(--green);
+        }
+
+        #stepStatus.status-problem {
+            background: #fde2e2;
+            color: var(--red);
+        }
+
+        #stepStatus.status-skipped {
+            background: #fff0cf;
+            color: var(--amber);
+        }
+
+        .value-line {
+            display: grid;
+            gap: 6px;
+        }
+
+        #currentValue {
+            font-size: 34px;
+            line-height: 1.05;
+            font-weight: 800;
+            word-break: break-word;
+        }
+
+        .details-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+        }
+
+        .field-box {
+            display: grid;
+            gap: 4px;
+            min-width: 0;
+            padding: 10px;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            background: #fafbfd;
+        }
+
+        .field-box strong {
+            overflow-wrap: anywhere;
+        }
+
+        .designators-box {
+            display: grid;
+            gap: 6px;
+        }
+
+        #currentDesignators {
+            min-height: 52px;
+            max-height: 96px;
+            overflow: auto;
+            padding: 10px;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            background: #fafbfd;
+            font-weight: 700;
+            line-height: 1.35;
+            overflow-wrap: anywhere;
+        }
+
+        #operatorNotes {
+            width: 100%;
+            min-height: 72px;
+            resize: vertical;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            padding: 10px;
+            color: var(--ink);
+        }
+
+        .step-actions {
+            display: grid;
+            grid-template-columns: 1.55fr 1fr 1fr;
+            gap: 8px;
+        }
+
+        #doneBtn {
+            min-height: 54px;
+            font-size: 22px;
+            letter-spacing: 0;
+        }
+
+        .shortcut {
+            display: block;
+            margin-top: 2px;
+            font-size: 10px;
+            font-weight: 400;
+            opacity: 0.8;
+        }
+
+        .nav-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        .auto-block {
+            display: none;
+            grid-template-columns: 1fr auto auto;
+            gap: 8px;
+            align-items: end;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--line);
+            background: #fafbfd;
+        }
+
+        .auto-block label {
+            display: grid;
+            gap: 4px;
+        }
+
+        #baseSeconds {
+            width: 100%;
+            min-height: 38px;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            padding: 8px;
+        }
+
+        #stepList {
+            min-height: 0;
+            overflow: auto;
+        }
+
+        body.focus-mode #workPanel {
+            grid-template-rows: auto auto;
+        }
+
+        body.focus-mode #stepList {
+            display: none;
+        }
+
+        body.focus-mode .current-block {
+            gap: 16px;
+        }
+
+        body.focus-mode #currentValue {
+            font-size: 38px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        th,
+        td {
+            padding: 8px;
+            border-bottom: 1px solid var(--line);
+            text-align: left;
+            vertical-align: top;
+        }
+
+        th {
+            position: sticky;
+            top: 0;
+            z-index: 1;
+            background: var(--panel);
+            color: var(--muted);
+            font-size: 11px;
+            text-transform: uppercase;
+        }
+
+        tr {
+            cursor: pointer;
+        }
+
+        tr.current {
+            background: #eaf2fb;
+        }
+
+        tr.done {
+            background: #edf8f2;
+        }
+
+        tr.problem {
+            background: #fff0f0;
+        }
+
+        tr.skipped {
+            background: #fff7e6;
+        }
+
+        .status-dot {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--muted);
+        }
+
+        tr.done .status-dot {
+            background: var(--green);
+        }
+
+        tr.problem .status-dot {
+            background: var(--red);
+        }
+
+        tr.skipped .status-dot {
+            background: var(--amber);
+        }
+
+        .compact {
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        .truncate {
+            max-width: 160px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        @media (max-width: 980px) {
+            body {
+                overflow: auto;
+            }
+
+            #app {
+                height: auto;
+                min-height: 100%;
+            }
+
+            #topbar,
+            #main {
+                grid-template-columns: 1fr;
+            }
+
+            #workPanel {
+                border-left: 0;
+                border-top: 1px solid var(--line);
+            }
+
+            #pcbStage {
+                min-height: 56vh;
+            }
+
+            .top-actions {
+                justify-content: flex-start;
+            }
+        }
     </style>
 </head>
 <body>
+    <script>
+        var pcbImage = {{ pcb_image | tojson }};
+        var pcbWidth = {{ pcb_width }};
+        var pcbHeight = {{ pcb_height }};
+        var tableData = {{ table_data | safe }};
+        var componentData = {{ component_data | safe }};
+        var projectName = {{ project_name | tojson }};
+        var reportEndpoint = "http://127.0.0.1:8765/api/report";
+    </script>
 
-    <!-- Przyciski do sterowania -->
-    <div id="controls">
-        <label for="intervalInput">Czas/element (sekundy):</label>
-        <input type="number" id="intervalInput" value="3" min="0.1" step="0.1"> wol
-        <button onclick="startAutoProgression()">Start Auto</button>
-        <button onclick="stopAutoProgression()">Stop Auto</button>
-        <span id="project-name">Projekt: {{ project_name }}</span> <!-- Dodane -->
-		<label for="pcbWidthRange"> Rozmiar </label>
-		<input type="range" id="pcbWidthRange" min="10" max="100" value="50">
-		<span id="pcbWidthValue">50%</span> <!-- Dodane do wyświetlenia wartości -->
-    </div>
+    <div id="app">
+        <header id="topbar">
+            <div class="project-title">
+                <strong id="projectName">{{ project_name }}</strong>
+                <span>MSX THT Inserter - stanowisko operatora</span>
+            </div>
 
-    <!-- Główny kontener -->
-    <div id="main-container">
-        <!-- Kontener obrazu PCB -->
-        <div id="pcb-container">
-			<div id="image-wrapper">
-				<img id="pcb-image" src="{{ pcb_image }}" alt="Obraz płytki PCB">
-				<canvas id="pcb-canvas"></canvas>
-			</div>
-		</div>
+            <div class="progress-wrap">
+                <div class="progress-meta">
+                    <span id="progressText">0 / 0</span>
+                    <span id="timerText"></span>
+                </div>
+                <div class="progress-line" aria-hidden="true">
+                    <div id="progressFill"></div>
+                </div>
+            </div>
 
-        <!-- Kontener tabeli komponentów -->
-        <div id="table-container">
-            <table id="component-table">
-                <thead>
-                    <tr>
-                        <th>Lp.</th>
-                        <th>Desygnator</th>
-                        <th>Wartość</th>
-                        <th>Indeks Medcom</th>
-                        <th>Ilość</th>
-                        <th>UWAGI</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <!-- Wiersze tabeli zostaną dodane przez JavaScript -->
-                </tbody>
-            </table>
-        </div>
+            <div class="view-controls">
+                <label for="zoomRange">
+                    Rozmiar
+                    <input type="range" id="zoomRange" min="35" max="220" value="100">
+                </label>
+                <span id="zoomValue" class="compact">100%</span>
+                <div class="rotation-group" aria-label="Obrót płytki">
+                    <span>Obrót</span>
+                    <button type="button" data-rotation="0">0</button>
+                    <button type="button" data-rotation="90">90</button>
+                    <button type="button" data-rotation="180">180</button>
+                    <button type="button" data-rotation="270">270</button>
+                </div>
+                <div class="marker-group" aria-label="Kolor markera">
+                    <span>Marker</span>
+                    <button type="button" data-marker="magenta">M</button>
+                    <button type="button" data-marker="cyan">C</button>
+                    <button type="button" data-marker="yellow">Ż</button>
+                    <button type="button" data-marker="mono">K</button>
+                </div>
+                <button type="button" id="centerBtn">Centruj</button>
+                <button type="button" id="pointsBtn">Pokaż resztę</button>
+                <button type="button" id="labelsBtn">Opisy: ON</button>
+            </div>
+
+            <div class="top-actions">
+                <button type="button" id="focusBtn">Focus</button>
+                <button type="button" id="fullscreenBtn">Pełny ekran</button>
+                <button type="button" id="exportBtn">Raport</button>
+                <button type="button" id="resetBtn" class="ghost">Reset</button>
+            </div>
+        </header>
+
+        <main id="main">
+            <section id="pcbStage" aria-label="Podgląd PCB">
+                <div id="imageSurface">
+                    <div id="imageWrapper">
+                        <img id="pcb-image" src="{{ pcb_image }}" alt="Obraz PCB">
+                        <canvas id="pcb-canvas"></canvas>
+                    </div>
+                </div>
+            </section>
+
+            <aside id="workPanel">
+                <section class="current-block">
+                    <div class="step-header">
+                        <span id="stepBadge">0 / 0</span>
+                        <span id="stepStatus">Do zrobienia</span>
+                    </div>
+
+                    <div class="value-line">
+                        <span class="field-label">Wartość</span>
+                        <div id="currentValue">-</div>
+                    </div>
+
+                    <div class="details-grid">
+                        <div class="field-box">
+                            <span class="field-label">Indeks Medcom</span>
+                            <strong id="currentIndexCode">-</strong>
+                        </div>
+                        <div class="field-box">
+                            <span class="field-label">Ilość</span>
+                            <strong id="currentQuantity">-</strong>
+                        </div>
+                    </div>
+
+                    <div class="designators-box">
+                        <span class="field-label">Desygnatory</span>
+                        <div id="currentDesignators">-</div>
+                    </div>
+
+                    <label class="designators-box" for="operatorNotes">
+                        <span class="field-label">Uwagi operatora</span>
+                        <textarea id="operatorNotes"></textarea>
+                    </label>
+
+                    <div class="step-actions">
+                        <button type="button" id="doneBtn" class="primary">OK<span class="shortcut">Enter / Space</span></button>
+                        <button type="button" id="problemBtn" class="danger">Problem<span class="shortcut">P</span></button>
+                        <button type="button" id="skipBtn" class="warning">Pomiń<span class="shortcut">S</span></button>
+                    </div>
+
+                    <div class="nav-actions">
+                        <button type="button" id="prevBtn">Wstecz<span class="shortcut">←</span></button>
+                        <button type="button" id="nextBtn">Dalej<span class="shortcut">→</span></button>
+                    </div>
+                </section>
+
+                <section class="auto-block">
+                    <label for="baseSeconds">
+                        <span class="field-label">Czas bazowy / element</span>
+                        <input type="number" id="baseSeconds" value="3" min="0.1" step="0.1">
+                    </label>
+                    <button type="button" id="autoBtn">Start Auto</button>
+                    <button type="button" id="pauseBtn">Pauza</button>
+                </section>
+
+                <section id="stepList">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th></th>
+                                <th>Lp.</th>
+                                <th>Desygnatory</th>
+                                <th>Ilość</th>
+                                <th>Wartość</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody"></tbody>
+                    </table>
+                </section>
+            </aside>
+        </main>
     </div>
 
     <script>
-    var currentIndex = 0;
-    var currentDesignators = null;
-    var timer = null;
-    var baseInterval = null;
+        var currentIndex = 0;
+        var autoTimer = null;
+        var elapsedTimer = null;
+        var pulseFrame = null;
+        var lastPulseDraw = 0;
+        var startedAt = Date.now();
+        var storageKey = 'msx-tht-progress:' + projectName + ':' + window.location.pathname;
+        var rowElements = [];
+        var currentViewZoom = 100;
+        var AUTO_FIT_MIN_ZOOM = 18;
 
-    function init() {
-        var tbody = document.querySelector('#component-table tbody');
-        tableData.forEach(function(row, index) {
-            var tr = document.createElement('tr');
-            tr.setAttribute('data-index', index);
-            tr.innerHTML = `
-                <td>${index + 1}</td>
-                <td class="desygnator-cell">${row.Desygnator}</td>
-                <td>${row['Wartość']}</td>
-                <td>${row['Indeks Medcom']}</td>
-                <td>${row.Ilość}</td>
-                <td contenteditable="true">${row.UWAGI}</td>
-            `;
-            tr.addEventListener('click', function() {
-                currentIndex = index;
-                highlightCurrentLine();
-            });
-            tbody.appendChild(tr);
-        });
-        drawComponents();
+        var els = {
+            progressText: document.getElementById('progressText'),
+            progressFill: document.getElementById('progressFill'),
+            timerText: document.getElementById('timerText'),
+            stepBadge: document.getElementById('stepBadge'),
+            stepStatus: document.getElementById('stepStatus'),
+            currentValue: document.getElementById('currentValue'),
+            currentIndexCode: document.getElementById('currentIndexCode'),
+            currentQuantity: document.getElementById('currentQuantity'),
+            currentDesignators: document.getElementById('currentDesignators'),
+            operatorNotes: document.getElementById('operatorNotes'),
+            tableBody: document.getElementById('tableBody'),
+            image: document.getElementById('pcb-image'),
+            canvas: document.getElementById('pcb-canvas'),
+            stage: document.getElementById('pcbStage'),
+            imageWrapper: document.getElementById('imageWrapper'),
+            zoomRange: document.getElementById('zoomRange'),
+            zoomValue: document.getElementById('zoomValue'),
+            baseSeconds: document.getElementById('baseSeconds'),
+            autoBtn: document.getElementById('autoBtn'),
+            focusBtn: document.getElementById('focusBtn'),
+            pointsBtn: document.getElementById('pointsBtn'),
+            labelsBtn: document.getElementById('labelsBtn'),
+            rotationButtons: Array.prototype.slice.call(document.querySelectorAll('[data-rotation]')),
+            markerButtons: Array.prototype.slice.call(document.querySelectorAll('[data-marker]'))
+        };
 
-        // Dodaj obsługę klawiatury
-        document.addEventListener('keydown', function(event) {
-            if (event.key === 'ArrowDown') {
-                highlightNext();
-            } else if (event.key === 'ArrowUp') {
-                highlightPrevious();
+        var state = loadState();
+
+        function loadState() {
+            try {
+                var saved = JSON.parse(localStorage.getItem(storageKey) || '{}');
+                return {
+                    currentIndex: clampIndex(saved.currentIndex || 0),
+                    statuses: saved.statuses || {},
+                    notes: saved.notes || {},
+                    startedAt: saved.startedAt || Date.now(),
+                    showAllPoints: saved.showAllPoints !== false,
+                    showLabels: saved.showLabels !== false,
+                    focusMode: saved.focusMode === true,
+                    operatorZoom: saved.operatorZoom || 100,
+                    rotation: normalizeRotation(saved.rotation || 0),
+                    markerPalette: normalizeMarkerPalette(saved.markerPalette || 'magenta')
+                };
+            } catch (error) {
+                return {
+                    currentIndex: 0,
+                    statuses: {},
+                    notes: {},
+                    startedAt: Date.now(),
+                    showAllPoints: true,
+                    showLabels: true,
+                    focusMode: false,
+                    operatorZoom: 100,
+                    rotation: 0,
+                    markerPalette: 'magenta'
+                };
             }
-        });
-    }
-
-    function highlightNext() {
-        currentIndex++;
-        if (currentIndex >= tableData.length) {
-            currentIndex = 0; // Powrót do pierwszej linii
         }
-        highlightCurrentLine();
-    }
 
-    function highlightPrevious() {
-        currentIndex--;
-        if (currentIndex < 0) {
-            currentIndex = tableData.length - 1; // Przejście do ostatniej linii
+        function saveState() {
+            state.currentIndex = currentIndex;
+            try {
+                localStorage.setItem(storageKey, JSON.stringify(state));
+            } catch (error) {
+                console.warn('Nie udało się zapisać postępu lokalnie.', error);
+            }
         }
-        highlightCurrentLine();
-    }
 
-    function highlightCurrentLine() {
-        // Usuń klasę 'highlight' z wszystkich wierszy
-        var rows = document.querySelectorAll('#component-table tbody tr');
-        rows.forEach(function(row) {
-            row.classList.remove('highlight');
-        });
+        function clampIndex(index) {
+            if (!tableData.length) {
+                return 0;
+            }
+            return Math.max(0, Math.min(tableData.length - 1, index));
+        }
 
-        // Dodaj klasę 'highlight' do aktualnego wiersza
-        var currentRow = rows[currentIndex];
-        currentRow.classList.add('highlight');
+        function textValue(row, keys, fallback) {
+            for (var i = 0; i < keys.length; i += 1) {
+                if (row[keys[i]] !== undefined && row[keys[i]] !== null && row[keys[i]] !== '') {
+                    return row[keys[i]];
+                }
+            }
+            return fallback || '';
+        }
 
-        // Pobierz desygnatory dla aktualnej linii
-        var designators = tableData[currentIndex].Desygnator;
+        function numericValue(value, fallback) {
+            if (typeof value === 'string') {
+                value = value.replace(',', '.').trim();
+            }
+            var parsed = parseFloat(value);
+            return Number.isFinite(parsed) ? parsed : fallback;
+        }
 
-        // Zapisz aktualne desygnatory
-        currentDesignators = designators;
+        function getRow(index) {
+            return tableData[clampIndex(index)] || {};
+        }
 
-        // Podświetl komponenty
-        highlightComponents(designators);
+        function getDesignators(index) {
+            return String(textValue(getRow(index), ['Desygnator'], '')).split(/[,+]/).map(function(item) {
+                return item.trim();
+            }).filter(Boolean);
+        }
 
-        // Przewiń do aktualnego wiersza
-        currentRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
+        function getStepDuration(index) {
+            var row = getRow(index);
+            var rowSeconds = numericValue(textValue(row, ['Sekundy'], ''), 0);
+            if (rowSeconds > 0) {
+                return rowSeconds * 1000;
+            }
+            var baseSeconds = numericValue(els.baseSeconds.value, 3);
+            var quantity = numericValue(textValue(row, ['Ilość'], 1), 1);
+            return Math.max(100, baseSeconds * Math.max(1, quantity) * 1000);
+        }
 
-    function startAutoProgression() {
-        if (!timer) {
-            var intervalValue = parseFloat(document.getElementById('intervalInput').value);
-            if (isNaN(intervalValue) || intervalValue <= 0) {
-                alert('Proszę wprowadzić poprawny czas podstawowy (większy niż 0).');
+        function statusLabel(status) {
+            if (status === 'done') {
+                return 'Gotowe';
+            }
+            if (status === 'problem') {
+                return 'Problem';
+            }
+            if (status === 'skipped') {
+            return 'Pominięte';
+            }
+            return 'Do zrobienia';
+        }
+
+        function renderTable() {
+            els.tableBody.innerHTML = '';
+            rowElements = [];
+            tableData.forEach(function(row, index) {
+                var tr = document.createElement('tr');
+                tr.dataset.index = String(index);
+                tr.innerHTML = [
+                    '<td><span class="status-dot"></span></td>',
+                    '<td>' + (index + 1) + '</td>',
+                    '<td class="truncate">' + escapeHtml(textValue(row, ['Desygnator'], '-')) + '</td>',
+                    '<td>' + escapeHtml(textValue(row, ['Ilość'], '-')) + '</td>',
+                    '<td class="truncate">' + escapeHtml(textValue(row, ['Wartość'], '-')) + '</td>'
+                ].join('');
+                tr.addEventListener('click', function() {
+                    goTo(index, true);
+                });
+                els.tableBody.appendChild(tr);
+                rowElements[index] = tr;
+            });
+        }
+
+        function renderCurrent() {
+            currentIndex = clampIndex(currentIndex);
+            var row = getRow(currentIndex);
+            var status = state.statuses[currentIndex] || 'pending';
+            var total = tableData.length;
+            var quantity = textValue(row, ['Ilość'], '-');
+
+            els.stepBadge.textContent = total ? (currentIndex + 1) + ' / ' + total : '0 / 0';
+            els.stepStatus.textContent = statusLabel(status);
+            els.stepStatus.className = status === 'pending' ? '' : 'status-' + status;
+            els.currentValue.textContent = textValue(row, ['Wartość'], '-');
+            els.currentIndexCode.textContent = textValue(row, ['Indeks Medcom'], '-');
+            els.currentQuantity.textContent = quantity;
+            els.currentDesignators.textContent = textValue(row, ['Desygnator'], '-');
+            els.operatorNotes.value = state.notes[currentIndex] !== undefined
+                ? state.notes[currentIndex]
+                : textValue(row, ['UWAGI'], '');
+
+            updateRows();
+            updateProgress();
+            applyZoomForCurrentStep();
+            saveState();
+        }
+
+        function updateRows() {
+            rowElements.forEach(function(tr, index) {
+                var status = state.statuses[index] || 'pending';
+                tr.className = '';
+                if (status !== 'pending') {
+                    tr.classList.add(status);
+                }
+                if (index === currentIndex) {
+                    tr.classList.add('current');
+                    tr.scrollIntoView({ block: 'nearest' });
+                }
+            });
+        }
+
+        function updateProgress() {
+            var resolved = Object.keys(state.statuses).filter(function(key) {
+                var index = Number(key);
+                return index >= 0 && index < tableData.length && ['done', 'problem', 'skipped'].includes(state.statuses[key]);
+            }).length;
+            var total = tableData.length;
+            var percent = total ? Math.round((resolved / total) * 100) : 0;
+            els.progressText.textContent = resolved + ' / ' + total + ' (' + percent + '%)';
+            els.progressFill.style.width = percent + '%';
+        }
+
+        function goTo(index, manual) {
+            currentIndex = clampIndex(index);
+            if (manual) {
+                stopAuto();
+            }
+            renderCurrent();
+        }
+
+        function move(delta) {
+            goTo(currentIndex + delta, true);
+        }
+
+        function mark(status, shouldAdvance) {
+            state.statuses[currentIndex] = status;
+            state.notes[currentIndex] = els.operatorNotes.value;
+            saveState();
+            updateProgress();
+            updateRows();
+            if (shouldAdvance && currentIndex < tableData.length - 1) {
+                goTo(currentIndex + 1, false);
+            } else {
+                renderCurrent();
+            }
+        }
+
+        function startAuto() {
+            if (autoTimer || !tableData.length) {
                 return;
             }
-            baseInterval = intervalValue * 1000; // Konwersja na milisekundy
-            autoProgression();
-        }
-    }
-
-    function autoProgression() {
-        highlightNext();
-        var quantity = parseInt(tableData[currentIndex].Ilość) || 1;
-        var interval = baseInterval * quantity;
-
-        // Wyczyść poprzedni timer, jeśli istnieje
-        if (timer) {
-            clearTimeout(timer);
+            els.autoBtn.classList.add('active');
+            scheduleAutoStep();
         }
 
-        timer = setTimeout(autoProgression, interval);
-    }
-
-    function stopAutoProgression() {
-        if (timer) {
-            clearTimeout(timer);
-            timer = null;
+        function scheduleAutoStep() {
+            clearTimeout(autoTimer);
+            autoTimer = setTimeout(function() {
+                mark('done', currentIndex < tableData.length - 1);
+                if (currentIndex < tableData.length - 1) {
+                    scheduleAutoStep();
+                } else {
+                    stopAuto();
+                }
+            }, getStepDuration(currentIndex));
         }
-    }
 
-function drawComponents() {
-    var canvas = document.getElementById('pcb-canvas');
-    var ctx = canvas.getContext('2d');
-    var image = document.getElementById('pcb-image');
+        function stopAuto() {
+            if (autoTimer) {
+                clearTimeout(autoTimer);
+                autoTimer = null;
+            }
+            els.autoBtn.classList.remove('active');
+        }
 
-    if (!image.complete) {
-        image.onload = drawComponents;
-        return;
-    }
+        function normalizeRotation(value) {
+            var rotation = parseInt(value, 10);
+            if ([0, 90, 180, 270].includes(rotation)) {
+                return rotation;
+            }
+            return 0;
+        }
 
-    // Ustaw rozmiar canvasu na podstawie wymiarów obrazu
-    canvas.width = image.clientWidth;
-    canvas.height = image.clientHeight;
+        function normalizeMarkerPalette(value) {
+            if (['magenta', 'cyan', 'yellow', 'mono'].includes(value)) {
+                return value;
+            }
+            return 'magenta';
+        }
 
-    // Skalowanie współrzędnych komponentów
-    var scaleX = canvas.width / pcbWidth;
-    var scaleY = canvas.height / pcbHeight;
+        function getMarkerPalette() {
+            var palettes = {
+                magenta: {
+                    pulse: 'rgba(255, 214, 10, ',
+                    core: 'rgba(255, 0, 168, 0.92)',
+                    outer: 'rgba(10, 10, 10, 0.9)',
+                    innerStroke: '#ffffff',
+                    center: '#ffffff'
+                },
+                cyan: {
+                    pulse: 'rgba(255, 214, 10, ',
+                    core: 'rgba(0, 210, 255, 0.92)',
+                    outer: 'rgba(10, 10, 10, 0.92)',
+                    innerStroke: '#ffffff',
+                    center: '#001018'
+                },
+                yellow: {
+                    pulse: 'rgba(255, 0, 168, ',
+                    core: 'rgba(255, 230, 0, 0.96)',
+                    outer: 'rgba(10, 10, 10, 0.95)',
+                    innerStroke: '#ffffff',
+                    center: '#111111'
+                },
+                mono: {
+                    pulse: 'rgba(255, 255, 255, ',
+                    core: 'rgba(15, 15, 15, 0.96)',
+                    outer: 'rgba(255, 255, 255, 0.96)',
+                    innerStroke: '#111111',
+                    center: '#ffffff'
+                }
+            };
+            return palettes[normalizeMarkerPalette(state.markerPalette)];
+        }
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+        function isSidewaysRotation() {
+            return state.rotation === 90 || state.rotation === 270;
+        }
 
-    componentData.forEach(function(component) {
-        ctx.fillStyle = 'rgba(0, 0, 255, 0.5)';
-        var size = 10;
+        function updateCanvasAspect() {
+            if (!els.image.complete || !els.image.naturalWidth || !els.image.naturalHeight) {
+                return;
+            }
+            if (isSidewaysRotation()) {
+                els.canvas.width = els.image.naturalHeight;
+                els.canvas.height = els.image.naturalWidth;
+            } else {
+                els.canvas.width = els.image.naturalWidth;
+                els.canvas.height = els.image.naturalHeight;
+            }
+        }
 
-        var x = component.X * scaleX;
-        var y = (pcbHeight - component.Y) * scaleY;
+        function getCanvasCssSize() {
+            return {
+                width: els.canvas.clientWidth || els.canvas.width || 1,
+                height: els.canvas.clientHeight || els.canvas.height || 1
+            };
+        }
 
-        ctx.fillRect(x - size / 2, y - size / 2, size, size);
-    });
-}
+        function mapComponentToCanvas(component, canvasWidth, canvasHeight) {
+            var unrotatedWidth = isSidewaysRotation() ? canvasHeight : canvasWidth;
+            var unrotatedHeight = isSidewaysRotation() ? canvasWidth : canvasHeight;
+            var baseX = numericValue(component.X, 0) / pcbWidth * unrotatedWidth;
+            var baseY = (pcbHeight - numericValue(component.Y, 0)) / pcbHeight * unrotatedHeight;
 
-function highlightComponents(designators) {
-    var canvas = document.getElementById('pcb-canvas');
-    var ctx = canvas.getContext('2d');
-    var image = document.getElementById('pcb-image');
+            if (state.rotation === 90) {
+                return {
+                    x: unrotatedHeight - baseY,
+                    y: baseX
+                };
+            }
+            if (state.rotation === 180) {
+                return {
+                    x: unrotatedWidth - baseX,
+                    y: unrotatedHeight - baseY
+                };
+            }
+            if (state.rotation === 270) {
+                return {
+                    x: baseY,
+                    y: unrotatedWidth - baseX
+                };
+            }
+            return {
+                x: baseX,
+                y: baseY
+            };
+        }
 
-    if (!image.complete) {
-        image.onload = function() {
-            highlightComponents(designators);
-        };
-        return;
-    }
+        function drawPcbImage(ctx, canvasWidth, canvasHeight) {
+            var image = els.image;
+            ctx.save();
+            if (state.rotation === 90) {
+                ctx.translate(canvasWidth, 0);
+                ctx.rotate(Math.PI / 2);
+                ctx.drawImage(image, 0, 0, canvasHeight, canvasWidth);
+            } else if (state.rotation === 180) {
+                ctx.translate(canvasWidth, canvasHeight);
+                ctx.rotate(Math.PI);
+                ctx.drawImage(image, 0, 0, canvasWidth, canvasHeight);
+            } else if (state.rotation === 270) {
+                ctx.translate(0, canvasHeight);
+                ctx.rotate(-Math.PI / 2);
+                ctx.drawImage(image, 0, 0, canvasHeight, canvasWidth);
+            } else {
+                ctx.drawImage(image, 0, 0, canvasWidth, canvasHeight);
+            }
+            ctx.restore();
+        }
 
-    // Set canvas size to match the displayed image size
-    canvas.width = image.clientWidth;
-    canvas.height = image.clientHeight;
+        function updateRotationButtons() {
+            els.rotationButtons.forEach(function(button) {
+                button.classList.toggle('active', normalizeRotation(button.dataset.rotation) === state.rotation);
+            });
+        }
 
-    var scaleX = canvas.width / pcbWidth;
-    var scaleY = canvas.height / pcbHeight;
+        function updateMarkerButtons() {
+            els.markerButtons.forEach(function(button) {
+                button.classList.toggle('active', normalizeMarkerPalette(button.dataset.marker) === state.markerPalette);
+            });
+        }
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+        function setRotation(value) {
+            state.rotation = normalizeRotation(value);
+            saveState();
+            updateRotationButtons();
+            updateCanvasAspect();
+            applyZoomForCurrentStep();
+        }
 
-    var desigList = designators.split(',').map(function(d) { return d.trim(); });
+        function setMarkerPalette(value) {
+            state.markerPalette = normalizeMarkerPalette(value);
+            saveState();
+            updateMarkerButtons();
+            drawComponents();
+        }
 
-    componentData.forEach(function(component) {
-        var isHighlighted = desigList.includes(component.Desygnator);
+        function cycleMarkerPalette() {
+            var palettes = ['magenta', 'cyan', 'yellow', 'mono'];
+            var current = palettes.indexOf(normalizeMarkerPalette(state.markerPalette));
+            setMarkerPalette(palettes[(current + 1) % palettes.length]);
+        }
 
-        ctx.fillStyle = isHighlighted ? 'rgba(255, 0, 0, 0.7)' : 'rgba(0, 0, 255, 0.5)';
-        var size = isHighlighted ? 30 : 10;
+        function drawSoftPoint(ctx, x, y) {
+            ctx.beginPath();
+            ctx.arc(x, y, 3, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(35, 100, 170, 0.14)';
+            ctx.fill();
+            ctx.lineWidth = 1;
+            ctx.strokeStyle = 'rgba(35, 100, 170, 0.22)';
+            ctx.stroke();
+        }
 
-        var x = component.X * scaleX;
-        var y = (pcbHeight - component.Y) * scaleY;
+        function drawActivePoint(ctx, point, labelIndex) {
+            var x = point.x;
+            var y = point.y;
+            var pulse = (Math.sin((performance.now() + labelIndex * 160) / 320) + 1) / 2;
+            var markerScale = clamp(0.85 + (currentViewZoom - 60) / 150, 0.85, 1.6);
+            var pulseRadius = (11 + pulse * 5) * markerScale;
+            var outerRadius = 8.5 * markerScale;
+            var coreRadius = 7 * markerScale;
+            var centerRadius = 2.4 * markerScale;
+            var palette = getMarkerPalette();
 
-        ctx.fillRect(x - size / 2, y - size / 2, size, size);
-    });
-}
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(x, y, pulseRadius, 0, Math.PI * 2);
+            ctx.lineWidth = (2 + pulse) * markerScale;
+            ctx.strokeStyle = palette.pulse + (0.38 + pulse * 0.3) + ')';
+            ctx.stroke();
 
+            ctx.beginPath();
+            ctx.arc(x, y, outerRadius, 0, Math.PI * 2);
+            ctx.lineWidth = 3.5 * markerScale;
+            ctx.strokeStyle = palette.outer;
+            ctx.stroke();
 
-    // Dodaj nasłuchiwanie zdarzenia 'resize' po zdefiniowaniu funkcji
-		window.addEventListener('resize', function() {
-			drawComponents();
+            ctx.beginPath();
+            ctx.arc(x, y, coreRadius, 0, Math.PI * 2);
+            ctx.fillStyle = palette.core;
+            ctx.fill();
+            ctx.lineWidth = 2.5 * markerScale;
+            ctx.strokeStyle = palette.innerStroke;
+            ctx.stroke();
 
-			if (currentDesignators) {
-				highlightComponents(currentDesignators);
-			}
-		});
+            ctx.beginPath();
+            ctx.arc(x, y, centerRadius, 0, Math.PI * 2);
+            ctx.fillStyle = palette.center;
+            ctx.fill();
+            ctx.restore();
+        }
 
-    // Uruchomienie funkcji inicjalizującej po załadowaniu strony
-    window.onload = init;
+        function drawLabel(ctx, text, x, y, labelIndex, canvasWidth, canvasHeight, placedLabels) {
+            ctx.save();
+            ctx.font = '800 13px Arial, Helvetica, sans-serif';
+            var paddingX = 4;
+            var labelHeight = 18;
+            var textWidth = ctx.measureText(text).width;
+            var labelWidth = Math.max(34, textWidth + paddingX * 2 + 2);
+            var label = chooseLabelPosition(x, y, labelWidth, labelHeight, labelIndex, canvasWidth, canvasHeight, placedLabels);
+            placedLabels.push(label);
+
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            ctx.lineTo(label.x + label.width / 2, label.y + label.height / 2);
+            ctx.lineWidth = 1;
+            ctx.strokeStyle = 'rgba(185, 28, 28, 0.38)';
+            ctx.stroke();
+
+            ctx.textBaseline = 'middle';
+            ctx.lineWidth = 4;
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+            ctx.strokeText(text, label.x + paddingX, label.y + label.height / 2 + 1);
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.72)';
+            ctx.strokeText(text, label.x + paddingX, label.y + label.height / 2 + 1);
+            ctx.fillStyle = '#b91c1c';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, label.x + paddingX, label.y + label.height / 2 + 1);
+            ctx.restore();
+        }
+
+        function chooseLabelPosition(x, y, width, height, labelIndex, canvasWidth, canvasHeight, placedLabels) {
+            var baseGap = 11;
+            var candidates = [
+                { x: x + baseGap, y: y - height - 5 },
+                { x: x + baseGap, y: y + 5 },
+                { x: x - width - baseGap, y: y - height - 5 },
+                { x: x - width - baseGap, y: y + 5 },
+                { x: x - width / 2, y: y - height - 14 },
+                { x: x - width / 2, y: y + 14 },
+                { x: x + 18, y: y - height / 2 },
+                { x: x - width - 18, y: y - height / 2 }
+            ];
+
+            var verticalStep = height + 3;
+            for (var ring = 1; ring <= 3; ring += 1) {
+                candidates.push({ x: x + baseGap, y: y - height - 5 - verticalStep * ring });
+                candidates.push({ x: x + baseGap, y: y + 5 + verticalStep * ring });
+                candidates.push({ x: x - width - baseGap, y: y - height - 5 - verticalStep * ring });
+                candidates.push({ x: x - width - baseGap, y: y + 5 + verticalStep * ring });
+            }
+
+            var ordered = candidates.slice(labelIndex % candidates.length).concat(candidates.slice(0, labelIndex % candidates.length));
+            var best = null;
+            var bestScore = Infinity;
+
+            ordered.forEach(function(candidate) {
+                var rect = {
+                    x: clamp(candidate.x, 10, Math.max(10, canvasWidth - width - 10)),
+                    y: clamp(candidate.y, 10, Math.max(10, canvasHeight - height - 10)),
+                    width: width,
+                    height: height
+                };
+                var overlapScore = placedLabels.reduce(function(total, placed) {
+                    return total + overlapArea(rect, placed, 5);
+                }, 0);
+                var distanceScore = Math.abs(rect.x + width / 2 - x) + Math.abs(rect.y + height / 2 - y);
+                var score = overlapScore * 10000 + distanceScore;
+
+                if (overlapScore === 0 && !best) {
+                    best = rect;
+                    bestScore = score;
+                } else if (score < bestScore) {
+                    best = rect;
+                    bestScore = score;
+                }
+            });
+
+            return best;
+        }
+
+        function overlapArea(a, b, padding) {
+            var left = Math.max(a.x - padding, b.x - padding);
+            var right = Math.min(a.x + a.width + padding, b.x + b.width + padding);
+            var top = Math.max(a.y - padding, b.y - padding);
+            var bottom = Math.min(a.y + a.height + padding, b.y + b.height + padding);
+            if (right <= left || bottom <= top) {
+                return 0;
+            }
+            return (right - left) * (bottom - top);
+        }
+
+        function roundedLabelPath(ctx, x, y, width, height, radius) {
+            var r = Math.min(radius, width / 2, height / 2);
+            ctx.beginPath();
+            ctx.moveTo(x + r, y);
+            ctx.lineTo(x + width - r, y);
+            ctx.quadraticCurveTo(x + width, y, x + width, y + r);
+            ctx.lineTo(x + width, y + height - r);
+            ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+            ctx.lineTo(x + r, y + height);
+            ctx.quadraticCurveTo(x, y + height, x, y + height - r);
+            ctx.lineTo(x, y + r);
+            ctx.quadraticCurveTo(x, y, x + r, y);
+        }
+
+        function clamp(value, min, max) {
+            return Math.max(min, Math.min(max, value));
+        }
+
+        function drawComponents() {
+            var canvas = els.canvas;
+            var image = els.image;
+            if (!image.complete || !image.naturalWidth || !image.naturalHeight) {
+                return;
+            }
+
+            updateCanvasAspect();
+
+            var dpr = window.devicePixelRatio || 1;
+            var size = getCanvasCssSize();
+            var width = size.width;
+            var height = size.height;
+            if (!width || !height) {
+                return;
+            }
+
+            canvas.width = Math.round(width * dpr);
+            canvas.height = Math.round(height * dpr);
+
+            var ctx = canvas.getContext('2d');
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            ctx.clearRect(0, 0, width, height);
+            drawPcbImage(ctx, width, height);
+
+            var activeDesignators = new Set(getDesignators(currentIndex));
+            var activePoints = [];
+
+            componentData.forEach(function(component) {
+                var designator = String(component.Desygnator || '').trim();
+                var isActive = activeDesignators.has(designator);
+                var point = mapComponentToCanvas(component, width, height);
+
+                if (isActive) {
+                    activePoints.push({ designator: designator, x: point.x, y: point.y });
+                } else if (state.showAllPoints) {
+                    drawSoftPoint(ctx, point.x, point.y);
+                }
+            });
+
+            var placedLabels = [];
+            activePoints.forEach(function(point, index) {
+                drawActivePoint(ctx, point, index);
+            });
+            if (state.showLabels) {
+                activePoints.forEach(function(point, index) {
+                    drawLabel(ctx, point.designator, point.x, point.y, index, width, height, placedLabels);
+                });
+            }
+        }
+
+        function centerOnCurrent() {
+            var points = getActiveCanvasPoints();
+            if (!points.length) {
+                return;
+            }
+            var bounds = getPointBounds(points);
+            var cannotFitGroup = bounds.maxX - bounds.minX > els.stage.clientWidth * 0.92 ||
+                bounds.maxY - bounds.minY > els.stage.clientHeight * 0.9;
+            var focusPoint = cannotFitGroup ? points[0] : null;
+            var centerX = focusPoint ? focusPoint.x : (bounds.minX + bounds.maxX) / 2;
+            var centerY = focusPoint ? focusPoint.y : (bounds.minY + bounds.maxY) / 2;
+            var targetLeft = centerX + els.imageWrapper.offsetLeft - els.stage.clientWidth / 2;
+            var targetTop = centerY + els.imageWrapper.offsetTop - els.stage.clientHeight / 2;
+            els.stage.scrollTo({
+                left: Math.max(0, targetLeft),
+                top: Math.max(0, targetTop),
+                behavior: 'smooth'
+            });
+        }
+
+        function getActiveCanvasPoints() {
+            if (!els.image.complete || !els.image.naturalWidth || !els.image.naturalHeight) {
+                return [];
+            }
+            updateCanvasAspect();
+            var size = getCanvasCssSize();
+            if (!size.width || !size.height) {
+                return [];
+            }
+            var designators = new Set(getDesignators(currentIndex));
+
+            return componentData.filter(function(component) {
+                return designators.has(String(component.Desygnator || '').trim());
+            }).map(function(component) {
+                var point = mapComponentToCanvas(component, size.width, size.height);
+                return {
+                    designator: String(component.Desygnator || '').trim(),
+                    x: point.x,
+                    y: point.y
+                };
+            });
+        }
+
+        function getPointBounds(points) {
+            return points.reduce(function(acc, point) {
+                acc.minX = Math.min(acc.minX, point.x);
+                acc.maxX = Math.max(acc.maxX, point.x);
+                acc.minY = Math.min(acc.minY, point.y);
+                acc.maxY = Math.max(acc.maxY, point.y);
+                return acc;
+            }, {
+                minX: Infinity,
+                maxX: -Infinity,
+                minY: Infinity,
+                maxY: -Infinity
+            });
+        }
+
+        function sanitizeZoom(value, minOverride) {
+            var minZoom = minOverride || numericValue(els.zoomRange.min, 35);
+            var maxZoom = numericValue(els.zoomRange.max, 220);
+            return Math.round(clamp(numericValue(value, 100), minZoom, maxZoom));
+        }
+
+        function setZoom(value, reason, baseZoom) {
+            var zoom = sanitizeZoom(value, reason === 'auto-fit' ? AUTO_FIT_MIN_ZOOM : undefined);
+            currentViewZoom = zoom;
+            els.imageWrapper.style.width = zoom + '%';
+            if (reason === 'auto-fit' && baseZoom && zoom < baseZoom) {
+                els.zoomValue.textContent = baseZoom + '% -> auto ' + zoom + '%';
+            } else {
+                els.zoomValue.textContent = zoom + '%';
+            }
+        }
+
+        function calculateFitZoom(baseZoom) {
+            if (!els.image.complete || !els.image.naturalWidth || !els.image.naturalHeight) {
+                return baseZoom;
+            }
+            var points = getActiveCanvasPoints();
+            if (points.length <= 1) {
+                return baseZoom;
+            }
+            var bounds = getPointBounds(points);
+            var boundsWidth = Math.max(1, bounds.maxX - bounds.minX);
+            var boundsHeight = Math.max(1, bounds.maxY - bounds.minY);
+            var marginX = Math.min(150, Math.max(54, els.stage.clientWidth * 0.16));
+            var marginY = Math.min(130, Math.max(54, els.stage.clientHeight * 0.14));
+            var availableWidth = Math.max(1, els.stage.clientWidth - marginX * 2);
+            var availableHeight = Math.max(1, els.stage.clientHeight - marginY * 2);
+            var fitScale = Math.min(1, availableWidth / boundsWidth, availableHeight / boundsHeight);
+
+            return sanitizeZoom(baseZoom * fitScale, AUTO_FIT_MIN_ZOOM);
+        }
+
+        function applyZoomForCurrentStep() {
+            var baseZoom = sanitizeZoom(state.operatorZoom || els.zoomRange.value || 100);
+            state.operatorZoom = baseZoom;
+            els.zoomRange.value = String(baseZoom);
+            setZoom(baseZoom);
+
+            requestAnimationFrame(function() {
+                var fitZoom = calculateFitZoom(baseZoom);
+                if (fitZoom < baseZoom) {
+                    setZoom(fitZoom, 'auto-fit', baseZoom);
+                } else {
+                    setZoom(baseZoom);
+                }
+                requestAnimationFrame(function() {
+                    drawComponents();
+                    centerOnCurrent();
+                });
+            });
+        }
+
+        function updateViewModes() {
+            document.body.classList.toggle('focus-mode', state.focusMode);
+            els.focusBtn.classList.toggle('active', state.focusMode);
+            els.pointsBtn.classList.toggle('active', state.showAllPoints);
+            els.labelsBtn.classList.toggle('active', state.showLabels);
+            els.pointsBtn.textContent = state.showAllPoints ? 'Reszta: ON' : 'Reszta: OFF';
+            els.labelsBtn.textContent = state.showLabels ? 'Opisy: ON' : 'Opisy: OFF';
+            updateRotationButtons();
+            updateMarkerButtons();
+            requestAnimationFrame(function() {
+                applyZoomForCurrentStep();
+            });
+        }
+
+        function toggleFocusMode() {
+            state.focusMode = !state.focusMode;
+            saveState();
+            updateViewModes();
+        }
+
+        function toggleAllPoints() {
+            state.showAllPoints = !state.showAllPoints;
+            saveState();
+            updateViewModes();
+        }
+
+        function toggleLabels() {
+            state.showLabels = !state.showLabels;
+            saveState();
+            updateViewModes();
+        }
+
+        function buildReport() {
+            state.notes[currentIndex] = els.operatorNotes.value;
+            saveState();
+
+            return {
+                projectName: projectName,
+                generatedAt: new Date().toISOString(),
+                elapsedSeconds: Math.round((Date.now() - state.startedAt) / 1000),
+                steps: tableData.map(function(row, index) {
+                    return {
+                        lp: index + 1,
+                        status: state.statuses[index] || 'pending',
+                        notes: state.notes[index] || '',
+                        designators: textValue(row, ['Desygnator'], ''),
+                        value: textValue(row, ['Wartość'], ''),
+                        medcomIndex: textValue(row, ['Indeks Medcom'], ''),
+                        quantity: textValue(row, ['Ilość'], ''),
+                        seconds: textValue(row, ['Sekundy'], '')
+                    };
+                })
+            };
+        }
+
+        function csvCell(value) {
+            return '"' + String(value === undefined || value === null ? '' : value).replace(/"/g, '""') + '"';
+        }
+
+        function reportToCsv(report) {
+            var rows = [[
+                'lp',
+                'status',
+                'uwagi_operatora',
+                'desygnatory',
+                'wartosc',
+                'indeks_medcom',
+                'ilosc',
+                'sekundy'
+            ]];
+
+            report.steps.forEach(function(step) {
+                rows.push([
+                    step.lp,
+                    statusLabel(step.status),
+                    step.notes,
+                    step.designators,
+                    step.value,
+                    step.medcomIndex,
+                    step.quantity,
+                    step.seconds
+                ]);
+            });
+
+            return '\ufeff' + rows.map(function(row) {
+                return row.map(csvCell).join(';');
+            }).join('\r\n');
+        }
+
+        function safeDownloadName(value) {
+            return String(value || 'projekt')
+                .replace(/[<>:"/\\|?*\x00-\x1f]+/g, '_')
+                .replace(/\s+/g, '_')
+                .replace(/^[._\s]+|[._\s]+$/g, '') || 'projekt';
+        }
+
+        function downloadCsvReport(report) {
+            var csv = reportToCsv(report);
+            var blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+            var url = URL.createObjectURL(blob);
+            var link = document.createElement('a');
+            link.href = url;
+            link.download = safeDownloadName(projectName) + '_raport_operatora.csv';
+            link.click();
+            URL.revokeObjectURL(url);
+        }
+
+        async function exportReport() {
+            var report = buildReport();
+
+            try {
+                var response = await fetch(reportEndpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(report)
+                });
+
+                var result = await response.json();
+                if (!response.ok || !result.ok) {
+                    throw new Error(result.error || 'Nie udało się zapisać raportu.');
+                }
+
+                alert('Raport zapisany:\n' + result.csvPath);
+            } catch (error) {
+                console.warn('Zapis raportu na serwer nie powiódł się. Pobieram CSV lokalnie.', error);
+                downloadCsvReport(report);
+                alert('Nie udało się zapisać raportu na zasób sieciowy. Pobrano CSV awaryjnie w przeglądarce.');
+            }
+        }
+
+        function resetProgress() {
+            if (!confirm('Wyczyścić postęp dla tego projektu?')) {
+                return;
+            }
+            stopAuto();
+            state = {
+                currentIndex: 0,
+                statuses: {},
+                notes: {},
+                startedAt: Date.now(),
+                showAllPoints: state.showAllPoints,
+                showLabels: state.showLabels,
+                focusMode: state.focusMode,
+                operatorZoom: state.operatorZoom,
+                rotation: state.rotation,
+                markerPalette: state.markerPalette
+            };
+            currentIndex = 0;
+            saveState();
+            renderCurrent();
+        }
+
+        function escapeHtml(value) {
+            return String(value).replace(/[&<>"']/g, function(char) {
+                return {
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    '"': '&quot;',
+                    "'": '&#039;'
+                }[char];
+            });
+        }
+
+        function updateElapsed() {
+            var seconds = Math.round((Date.now() - state.startedAt) / 1000);
+            var minutes = Math.floor(seconds / 60);
+            var rest = seconds % 60;
+            els.timerText.textContent = 'czas: ' + minutes + 'm ' + String(rest).padStart(2, '0') + 's';
+        }
+
+        function startPulseLoop(timestamp) {
+            if (!timestamp || timestamp - lastPulseDraw > 80) {
+                drawComponents();
+                lastPulseDraw = timestamp || performance.now();
+            }
+            pulseFrame = requestAnimationFrame(startPulseLoop);
+        }
+
+        function bindEvents() {
+            document.getElementById('doneBtn').addEventListener('click', function() { mark('done', true); });
+            document.getElementById('problemBtn').addEventListener('click', function() { mark('problem', false); });
+            document.getElementById('skipBtn').addEventListener('click', function() { mark('skipped', true); });
+            document.getElementById('prevBtn').addEventListener('click', function() { move(-1); });
+            document.getElementById('nextBtn').addEventListener('click', function() { move(1); });
+            document.getElementById('autoBtn').addEventListener('click', startAuto);
+            document.getElementById('pauseBtn').addEventListener('click', stopAuto);
+            document.getElementById('centerBtn').addEventListener('click', centerOnCurrent);
+            document.getElementById('exportBtn').addEventListener('click', exportReport);
+            document.getElementById('resetBtn').addEventListener('click', resetProgress);
+            document.getElementById('focusBtn').addEventListener('click', toggleFocusMode);
+            document.getElementById('pointsBtn').addEventListener('click', toggleAllPoints);
+            document.getElementById('labelsBtn').addEventListener('click', toggleLabels);
+            els.rotationButtons.forEach(function(button) {
+                button.addEventListener('click', function() {
+                    setRotation(button.dataset.rotation);
+                });
+            });
+            els.markerButtons.forEach(function(button) {
+                button.addEventListener('click', function() {
+                    setMarkerPalette(button.dataset.marker);
+                });
+            });
+            document.getElementById('fullscreenBtn').addEventListener('click', function() {
+                if (!document.fullscreenElement) {
+                    document.documentElement.requestFullscreen();
+                } else {
+                    document.exitFullscreen();
+                }
+            });
+            els.zoomRange.addEventListener('input', function(event) {
+                state.operatorZoom = sanitizeZoom(event.target.value);
+                saveState();
+                applyZoomForCurrentStep();
+            });
+            els.operatorNotes.addEventListener('input', function() {
+                state.notes[currentIndex] = els.operatorNotes.value;
+                saveState();
+            });
+            window.addEventListener('resize', function() {
+                applyZoomForCurrentStep();
+            });
+            document.addEventListener('keydown', function(event) {
+                var tag = event.target.tagName.toLowerCase();
+                if (tag === 'input' || tag === 'textarea') {
+                    return;
+                }
+                if (event.key === 'ArrowRight') {
+                    event.preventDefault();
+                    move(1);
+                } else if (event.key === 'ArrowLeft') {
+                    event.preventDefault();
+                    move(-1);
+                } else if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    mark('done', true);
+                } else if (event.key.toLowerCase() === 'p') {
+                    event.preventDefault();
+                    mark('problem', false);
+                } else if (event.key.toLowerCase() === 's') {
+                    event.preventDefault();
+                    mark('skipped', true);
+                } else if (event.key.toLowerCase() === 'a') {
+                    event.preventDefault();
+                    startAuto();
+                } else if (event.key.toLowerCase() === 'f') {
+                    event.preventDefault();
+                    toggleFocusMode();
+                } else if (event.key.toLowerCase() === 'o') {
+                    event.preventDefault();
+                    toggleAllPoints();
+                } else if (event.key.toLowerCase() === 'l') {
+                    event.preventDefault();
+                    toggleLabels();
+                } else if (event.key.toLowerCase() === 'r') {
+                    event.preventDefault();
+                    setRotation((state.rotation + 90) % 360);
+                } else if (event.key.toLowerCase() === 'm') {
+                    event.preventDefault();
+                    cycleMarkerPalette();
+                } else if (event.key === 'Escape') {
+                    event.preventDefault();
+                    stopAuto();
+                }
+            });
+        }
+
+        function init() {
+            startedAt = state.startedAt;
+            currentIndex = clampIndex(state.currentIndex);
+            bindEvents();
+            renderTable();
+            updateViewModes();
+            state.operatorZoom = sanitizeZoom(state.operatorZoom || 100);
+            els.zoomRange.value = String(state.operatorZoom);
+            renderCurrent();
+            updateElapsed();
+            elapsedTimer = setInterval(updateElapsed, 1000);
+            if (els.image.complete) {
+                applyZoomForCurrentStep();
+            } else {
+                els.image.addEventListener('load', function() {
+                    applyZoomForCurrentStep();
+                });
+            }
+            if (!pulseFrame) {
+                pulseFrame = requestAnimationFrame(startPulseLoop);
+            }
+        }
+
+        init();
     </script>
-
-<script>
-    var pcbImage = "{{ pcb_image }}";
-    var pcbWidth = {{ pcb_width }};
-    var pcbHeight = {{ pcb_height }};
-    var tableData = {{ table_data | safe }};
-    var componentData = {{ component_data | safe }};
-	
-	// Suwak do zmiany szerokości kontenera PCB
-	document.getElementById("pcbWidthRange").addEventListener("input", function(event) {
-    var widthPercentage = event.target.value + "%";
-    document.getElementById("pcb-container").style.maxWidth = widthPercentage;
-
-    // Wyświetl bieżącą wartość suwaka
-    document.getElementById("pcbWidthValue").textContent = widthPercentage;
-
-    // Ustaw rozmiar canvasu zgodnie z rozmiarem obrazu
-    var canvas = document.getElementById('pcb-canvas');
-    canvas.width = document.getElementById('pcb-image').clientWidth;
-    canvas.height = document.getElementById('pcb-image').clientHeight;
-
-    // Rysuj ponownie komponenty i podświetlenie
-    drawComponents();
-    if (currentDesignators) {
-        highlightComponents(currentDesignators);
-    }
-});
-</script>
-
 </body>
 </html>

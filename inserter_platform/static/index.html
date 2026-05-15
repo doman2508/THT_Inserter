@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MSX THT Inserter Platform</title>
+    <link rel="stylesheet" href="/styles.css?v=20260514-pro-lines">
+</head>
+<body>
+    <div class="app-shell">
+        <header class="topbar">
+            <div>
+                <strong>MSX THT Inserter</strong>
+                <span>platforma produkcyjna</span>
+                <em id="operatorHeaderProject" hidden></em>
+            </div>
+            <nav>
+                <button type="button" data-view="admin" class="active">Admin</button>
+                <button type="button" data-view="operator">Operator</button>
+            </nav>
+        </header>
+
+        <main>
+            <section id="adminView" class="view active">
+                <div class="page-head" id="adminPageHead">
+                    <div>
+                        <h1 id="adminPageTitle">Projekty</h1>
+                        <p id="adminPageSubtitle">Lista projektów i przygotowanie produkcji.</p>
+                    </div>
+                    <div class="admin-actions">
+                        <button type="button" id="backToProjects" data-admin-detail-action hidden>Projekty</button>
+                        <button type="button" data-panel="newProject" data-admin-list-action>Nowy projekt</button>
+                        <button type="button" data-panel="importProject" data-admin-list-action class="primary">Importuj projekt</button>
+                        <button type="button" data-panel="pinIndexes" data-admin-list-action>Indeksy pinowe</button>
+                        <button type="button" id="refreshProjects" data-admin-list-action>Odśwież</button>
+                    </div>
+                </div>
+
+                <section class="panel projects-panel" id="adminProjectListPanel">
+                    <div class="projects-toolbar">
+                        <div>
+                            <h2>Lista projektów</h2>
+                            <p>Wybierz projekt, aby otworzyć dane.</p>
+                        </div>
+                        <label class="search-field">
+                            Szukaj
+                            <input id="projectSearch" placeholder="Nazwa, status, indeks...">
+                        </label>
+                    </div>
+                    <div class="table-wrap">
+                        <table class="projects-table">
+                            <thead>
+                                <tr>
+                                    <th>Projekt</th>
+                                    <th>Status</th>
+                                    <th>Kroki</th>
+                                    <th>Punkty</th>
+                                    <th>PCB</th>
+                                    <th>Utworzono</th>
+                                    <th>Modyfikowano</th>
+                                    <th>Akcje</th>
+                                </tr>
+                            </thead>
+                            <tbody id="projectTableBody">
+                                <tr><td colspan="8" class="muted">Ładuję projekty...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <div class="workbench-grid" id="adminActionPanels" hidden>
+                    <form id="projectForm" class="panel action-panel" data-action-panel="newProject" hidden>
+                        <div class="panel-head">
+                            <div>
+                                <h2>Nowy projekt</h2>
+                                <p>Szkic projektu</p>
+                            </div>
+                            <button type="button" data-close-panel>Ukryj</button>
+                        </div>
+                        <label>
+                            Nazwa projektu
+                            <input name="name" required placeholder="VPPS 615.23">
+                        </label>
+                        <div class="grid two compact-grid">
+                            <label>
+                                Szerokość PCB
+                                <input name="boardWidth" inputmode="decimal" placeholder="mm">
+                            </label>
+                            <label>
+                                Wysokość PCB
+                                <input name="boardHeight" inputmode="decimal" placeholder="mm">
+                            </label>
+                        </div>
+                        <button type="submit" class="primary">Utwórz projekt</button>
+                    </form>
+
+                    <form id="importForm" class="panel action-panel import-panel" data-action-panel="importProject" hidden>
+                        <div class="panel-head">
+                            <div>
+                                <h2>Import projektu</h2>
+                                <p>BOM XLSX, P&amp;P XLSX, obraz PCB</p>
+                            </div>
+                            <button type="button" data-close-panel>Ukryj</button>
+                        </div>
+                        <div class="grid two compact-grid">
+                            <label>
+                                Nazwa projektu
+                                <input name="name" required placeholder="VPPS 615.23">
+                            </label>
+                            <label>
+                                Wymiary PCB
+                                <span class="inline-inputs">
+                                    <input name="boardWidth" inputmode="decimal" placeholder="szer. mm">
+                                    <input name="boardHeight" inputmode="decimal" placeholder="wys. mm">
+                                </span>
+                            </label>
+                        </div>
+                        <div class="grid two compact-grid">
+                            <label>
+                                BOM XLSX
+                                <input name="bomFile" type="file" accept=".xlsx" required>
+                            </label>
+                            <label>
+                                P&amp;P XLSX
+                                <input name="ppFile" type="file" accept=".xlsx" required>
+                            </label>
+                        </div>
+                        <label>
+                            Zdjęcie lub obraz PCB
+                            <input name="boardImage" type="file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp">
+                        </label>
+                        <div class="form-row">
+                            <button type="submit" class="primary">Importuj projekt</button>
+                            <div id="importSummary" class="muted">Po imporcie projekt zostanie wybrany i pokazany w szczegółach.</div>
+                        </div>
+                    </form>
+
+                    <form id="pinIndexForm" class="panel action-panel" data-action-panel="pinIndexes" hidden>
+                        <div class="panel-head">
+                            <div>
+                                <h2>Indeksy pinowe</h2>
+                                <p>Lista indeksów Medcom, które trafiają do przygotowania pinów.</p>
+                            </div>
+                            <button type="button" data-close-panel>Ukryj</button>
+                        </div>
+                        <div class="grid two compact-grid">
+                            <label>
+                                Indeks Medcom
+                                <input name="medcomIndex" required placeholder="M-ZLACZ-00015">
+                            </label>
+                            <label>
+                                Opis / uwaga
+                                <input name="note" placeholder="np. listwa cięta na odcinki">
+                            </label>
+                        </div>
+                        <div class="form-row">
+                            <button type="submit" class="primary">Dodaj indeks</button>
+                            <span class="muted">Tylko te indeksy będą automatycznie proponowane w zakładce Przygotowanie.</span>
+                        </div>
+                        <div id="pinIndexList" class="pin-index-list"></div>
+                    </form>
+
+                    <form id="stepForm" class="panel action-panel" data-action-panel="addLine" hidden>
+                        <div class="panel-head">
+                            <div>
+                                <h2>Dodaj linię ręcznie</h2>
+                                <p>Ręczne uzupełnienie linii</p>
+                            </div>
+                            <button type="button" data-close-panel>Ukryj</button>
+                        </div>
+                        <label>
+                            Projekt
+                            <select name="projectId" required></select>
+                        </label>
+                        <label>
+                            Desygnatory
+                            <input name="designators" required placeholder="R1,R2,R3">
+                        </label>
+                        <div class="grid two compact-grid">
+                            <label>
+                                Wartość
+                                <input name="value" required placeholder="10k">
+                            </label>
+                            <label>
+                                Indeks Medcom
+                                <input name="medcomIndex" placeholder="M-...">
+                            </label>
+                        </div>
+                        <label>
+                            Ilość
+                            <input name="quantity" type="number" min="1" value="1">
+                        </label>
+                        <button type="submit" class="primary">Dodaj linię</button>
+                    </form>
+
+                    <form id="editProjectForm" class="panel action-panel" data-action-panel="editProject" hidden>
+                        <div class="panel-head">
+                            <div>
+                                <h2>Edytuj projekt</h2>
+                                <p>Dane podstawowe i status</p>
+                            </div>
+                            <button type="button" data-close-panel>Ukryj</button>
+                        </div>
+                        <label>
+                            Nazwa projektu
+                            <input name="name" required>
+                        </label>
+                        <div class="grid two compact-grid">
+                            <label>
+                                Szerokość PCB
+                                <input name="boardWidth" inputmode="decimal" placeholder="mm">
+                            </label>
+                            <label>
+                                Wysokość PCB
+                                <input name="boardHeight" inputmode="decimal" placeholder="mm">
+                            </label>
+                        </div>
+                        <label>
+                            Status
+                            <select name="status">
+                                <option value="draft">Szkic</option>
+                                <option value="imported">Zaimportowany</option>
+                                <option value="needs_preparation">Do przygotowania</option>
+                                <option value="prepared">Przygotowany</option>
+                                <option value="ready">Gotowy</option>
+                                <option value="active">W produkcji</option>
+                                <option value="archived">Archiwum</option>
+                            </select>
+                        </label>
+                        <button type="submit" class="primary">Zapisz zmiany</button>
+                    </form>
+
+                    <form id="boardImageForm" class="panel action-panel" data-action-panel="boardImage" hidden>
+                        <div class="panel-head">
+                            <div>
+                                <h2>Obraz PCB</h2>
+                                <p>Dołącz lub podmień zdjęcie płytki</p>
+                            </div>
+                            <button type="button" data-close-panel>Ukryj</button>
+                        </div>
+                        <label>
+                            Zdjęcie lub obraz PCB
+                            <input name="boardImage" type="file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp" required>
+                        </label>
+                        <button type="submit" class="primary">Zapisz obraz PCB</button>
+                    </form>
+
+                    <form id="reimportForm" class="panel action-panel" data-action-panel="reimportProject" hidden>
+                        <div class="panel-head">
+                            <div>
+                                <h2>Reimport Exceli</h2>
+                                <p>Zastępuje linie i punkty wybranego projektu</p>
+                            </div>
+                            <button type="button" data-close-panel>Ukryj</button>
+                        </div>
+                        <div class="grid two compact-grid">
+                            <label>
+                                BOM XLSX
+                                <input name="bomFile" type="file" accept=".xlsx" required>
+                            </label>
+                            <label>
+                                P&amp;P XLSX
+                                <input name="ppFile" type="file" accept=".xlsx" required>
+                            </label>
+                        </div>
+                        <label>
+                            Opcjonalnie podmień też obraz PCB
+                            <input name="boardImage" type="file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp">
+                        </label>
+                        <div class="form-row">
+                            <button type="submit" class="primary">Reimportuj dane</button>
+                            <div id="reimportSummary" class="muted">Istniejące linie i punkty zostaną zastąpione nowym importem.</div>
+                        </div>
+                    </form>
+                </div>
+
+                <section id="projectDetails" class="panel project-details" hidden>
+                    <div class="empty-state">
+                        <strong>Wybierz projekt</strong>
+                        <span>Po wyborze zobaczysz import, linie montażowe, punkty P&amp;P, obraz PCB i ustawienia operatora.</span>
+                    </div>
+                </section>
+            </section>
+
+            <section id="operatorView" class="view">
+                <div class="page-head operator-page-head">
+                    <div>
+                        <h1>Operator</h1>
+                        <p>Jedno miejsce pracy operatora z zapisem statusów, uwag i przebiegu.</p>
+                    </div>
+                </div>
+
+                <section id="operatorProjectBrowser" class="operator-project-browser">
+                    <div class="operator-browser-head">
+                        <div>
+                            <h1>Projekty operatora</h1>
+                            <p>Wybierz projekt przekazany do montażu THT.</p>
+                        </div>
+                        <label class="search-field">
+                            Szukaj
+                            <input id="operatorProjectSearch" placeholder="Nazwa projektu, status...">
+                        </label>
+                    </div>
+                    <div id="operatorProjectList" class="operator-project-list"></div>
+                </section>
+
+                <div class="grid two operator-session-start">
+                    <form id="sessionForm" class="panel">
+                        <h2>Start sesji</h2>
+                        <label>
+                            Projekt
+                            <select name="projectId" required></select>
+                        </label>
+                        <label>
+                            Operator
+                            <input name="operatorName" placeholder="Imię / inicjały">
+                        </label>
+                        <label>
+                            Stanowisko
+                            <input name="stationName" placeholder="THT-01">
+                        </label>
+                        <button type="submit" class="primary">Rozpocznij</button>
+                    </form>
+
+                    <section class="panel">
+                        <h2>Aktualna sesja</h2>
+                        <div id="sessionInfo" class="muted">Brak aktywnej sesji.</div>
+                    </section>
+                </div>
+
+                <section id="operatorWorkspace" class="panel operator-work-panel" hidden>
+                    <div id="operatorSteps" class="operator-steps"></div>
+                </section>
+            </section>
+        </main>
+    </div>
+
+    <script src="/app.js?v=20260514-pro-lines"></script>
+</body>
+</html>
