@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MSX THT Inserter Platform</title>
-    <link rel="stylesheet" href="/styles.css?v=20260514-pro-lines">
+    <link rel="stylesheet" href="/styles.css?v=20260529-admin-status">
 </head>
 <body>
     <div class="app-shell">
@@ -223,7 +223,6 @@
                                 <option value="needs_preparation">Do przygotowania</option>
                                 <option value="prepared">Przygotowany</option>
                                 <option value="ready">Gotowy</option>
-                                <option value="active">W produkcji</option>
                                 <option value="archived">Archiwum</option>
                             </select>
                         </label>
@@ -243,6 +242,30 @@
                             <input name="boardImage" type="file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp" required>
                         </label>
                         <button type="submit" class="primary">Zapisz obraz PCB</button>
+                    </form>
+
+                    <form id="previewImagesForm" class="panel action-panel" data-action-panel="previewImages" hidden>
+                        <div class="panel-head">
+                            <div>
+                                <h2>PodglÄ…dy operatora</h2>
+                                <p>Osobne zdjÄ™cia pomocnicze dla montaĹĽu THT i oklejania</p>
+                            </div>
+                            <button type="button" data-close-panel>Ukryj</button>
+                        </div>
+                        <div class="grid two compact-grid">
+                            <label>
+                                PodglÄ…d THT
+                                <input name="thtPreviewImage" type="file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp">
+                            </label>
+                            <label>
+                                PodglÄ…d Oklejanie
+                                <input name="labelingPreviewImage" type="file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp">
+                            </label>
+                        </div>
+                        <div class="form-row">
+                            <button type="submit" class="primary">Zapisz podglÄ…dy</button>
+                            <span class="muted">MoĹĽesz podmieniÄ‡ tylko jedno zdjÄ™cie, drugie zostanie bez zmian.</span>
+                        </div>
                     </form>
 
                     <form id="reimportForm" class="panel action-panel" data-action-panel="reimportProject" hidden>
@@ -335,6 +358,6 @@
         </main>
     </div>
 
-    <script src="/app.js?v=20260514-pro-lines"></script>
+    <script src="/app.js?v=20260529-gerber-contours"></script>
 </body>
 </html>

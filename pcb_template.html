@@ -93,10 +93,10 @@
 
         #topbar {
             display: grid;
-            grid-template-columns: minmax(180px, 0.9fr) minmax(220px, 320px) minmax(420px, 1.4fr) auto;
-            gap: 16px;
+            grid-template-columns: minmax(145px, 0.65fr) minmax(135px, 190px) minmax(0, 1fr) auto;
+            gap: 8px;
             align-items: center;
-            padding: 12px 16px;
+            padding: 7px 10px;
             border-bottom: 1px solid var(--line);
             background: var(--panel);
         }
@@ -110,23 +110,23 @@
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
-            font-size: 18px;
+            font-size: 16px;
         }
 
         .project-title span,
         .progress-meta,
         .field-label {
             color: var(--muted);
-            font-size: 12px;
+            font-size: 11px;
         }
 
         .progress-wrap {
             display: grid;
-            gap: 6px;
+            gap: 4px;
         }
 
         .progress-line {
-            height: 10px;
+            height: 7px;
             overflow: hidden;
             border-radius: 999px;
             background: var(--panel-strong);
@@ -141,9 +141,16 @@
 
         .top-actions {
             display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
+            flex-wrap: nowrap;
+            gap: 6px;
             justify-content: flex-end;
+            white-space: nowrap;
+        }
+
+        .preview-buttons {
+            display: inline-flex;
+            flex-wrap: nowrap;
+            gap: 5px;
         }
 
         .top-actions button.active,
@@ -202,21 +209,29 @@
 
         .view-controls {
             display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
+            flex-wrap: nowrap;
+            gap: 6px;
             align-items: center;
+            min-width: 0;
+            overflow-x: auto;
+            white-space: nowrap;
+            scrollbar-width: thin;
         }
 
         .view-controls label {
             display: inline-flex;
-            gap: 8px;
+            gap: 6px;
             align-items: center;
             color: var(--muted);
-            font-size: 13px;
+            font-size: 12px;
         }
 
         #zoomRange {
-            width: 160px;
+            width: 116px;
+        }
+
+        #markerSizeRange {
+            width: 76px;
         }
 
         .rotation-group {
@@ -229,7 +244,7 @@
         .rotation-group span,
         .marker-group span {
             color: var(--muted);
-            font-size: 13px;
+            font-size: 12px;
         }
 
         .marker-group {
@@ -240,8 +255,13 @@
 
         .rotation-group button,
         .marker-group button {
+            min-height: 30px;
+            padding: 4px 7px;
+        }
+
+        #topbar button {
             min-height: 32px;
-            padding: 5px 8px;
+            padding: 5px 9px;
         }
 
         #workPanel {
@@ -255,8 +275,8 @@
 
         .current-block {
             display: grid;
-            gap: 14px;
-            padding: 16px;
+            gap: 8px;
+            padding: 10px 14px;
             border-bottom: 1px solid var(--line);
         }
 
@@ -271,8 +291,8 @@
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            min-width: 74px;
-            min-height: 38px;
+            min-width: 62px;
+            min-height: 32px;
             border-radius: 6px;
             background: var(--panel-strong);
             font-weight: 700;
@@ -280,10 +300,10 @@
 
         #stepStatus {
             border-radius: 999px;
-            padding: 6px 10px;
+            padding: 4px 9px;
             background: var(--panel-strong);
             color: var(--muted);
-            font-size: 12px;
+            font-size: 11px;
             font-weight: 700;
             text-transform: uppercase;
         }
@@ -305,11 +325,13 @@
 
         .value-line {
             display: grid;
-            gap: 6px;
+            gap: 3px;
         }
 
         #currentValue {
-            font-size: 34px;
+            max-height: 61px;
+            overflow: auto;
+            font-size: 28px;
             line-height: 1.05;
             font-weight: 800;
             word-break: break-word;
@@ -318,14 +340,14 @@
         .details-grid {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 10px;
+            gap: 8px;
         }
 
         .field-box {
             display: grid;
-            gap: 4px;
+            gap: 2px;
             min-width: 0;
-            padding: 10px;
+            padding: 7px 8px;
             border: 1px solid var(--line);
             border-radius: 6px;
             background: #fafbfd;
@@ -337,14 +359,35 @@
 
         .designators-box {
             display: grid;
-            gap: 6px;
+            gap: 4px;
+        }
+
+        .polarity-notice {
+            display: grid;
+            gap: 3px;
+            padding: 8px 10px;
+            border: 1px solid #e2bd65;
+            border-radius: 6px;
+            background: #fff7e6;
+            color: #694300;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .polarity-notice[hidden] {
+            display: none;
+        }
+
+        .polarity-notice strong {
+            color: var(--ink);
+            font-size: 13px;
         }
 
         #currentDesignators {
-            min-height: 52px;
-            max-height: 96px;
+            min-height: 40px;
+            max-height: 58px;
             overflow: auto;
-            padding: 10px;
+            padding: 8px;
             border: 1px solid var(--line);
             border-radius: 6px;
             background: #fafbfd;
@@ -355,30 +398,31 @@
 
         #operatorNotes {
             width: 100%;
-            min-height: 72px;
+            min-height: 40px;
+            max-height: 72px;
             resize: vertical;
             border: 1px solid var(--line);
             border-radius: 6px;
-            padding: 10px;
+            padding: 8px;
             color: var(--ink);
         }
 
         .step-actions {
             display: grid;
             grid-template-columns: 1.55fr 1fr 1fr;
-            gap: 8px;
+            gap: 7px;
         }
 
         #doneBtn {
-            min-height: 54px;
-            font-size: 22px;
+            min-height: 42px;
+            font-size: 19px;
             letter-spacing: 0;
         }
 
         .shortcut {
             display: block;
-            margin-top: 2px;
-            font-size: 10px;
+            margin-top: 0;
+            font-size: 9px;
             font-weight: 400;
             opacity: 0.8;
         }
@@ -386,7 +430,11 @@
         .nav-actions {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 8px;
+            gap: 7px;
+        }
+
+        .nav-actions button {
+            min-height: 38px;
         }
 
         .auto-block {
@@ -509,6 +557,100 @@
             white-space: nowrap;
         }
 
+        .preview-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 20;
+            display: grid;
+            place-items: center;
+            padding: 4px;
+            background: rgba(15, 23, 42, 0.62);
+        }
+
+        .preview-modal[hidden] {
+            display: none;
+        }
+
+        .preview-dialog {
+            display: grid;
+            grid-template-rows: auto minmax(0, 1fr);
+            width: calc(100vw - 8px);
+            height: calc(100dvh - 8px);
+            max-width: calc(100vw - 8px);
+            max-height: calc(100dvh - 8px);
+            min-width: 0;
+            min-height: 0;
+            overflow: hidden;
+            border-radius: 6px;
+            background: #ffffff;
+            box-shadow: 0 24px 70px rgba(0, 0, 0, 0.35);
+        }
+
+        .preview-head {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            justify-content: space-between;
+            min-height: 44px;
+            padding: 6px 10px;
+            border-bottom: 1px solid var(--line);
+        }
+
+        .preview-head > div:first-child {
+            display: grid;
+            min-width: 0;
+        }
+
+        .preview-head strong {
+            font-size: 16px;
+        }
+
+        .preview-head span {
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        .preview-switches {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            justify-content: flex-end;
+        }
+
+        .preview-switches button,
+        #previewClose {
+            min-height: 34px;
+            padding: 6px 10px;
+        }
+
+        .preview-switches button.active {
+            border-color: var(--blue);
+            background: #eaf2fb;
+            color: var(--blue);
+            font-weight: 700;
+        }
+
+        .preview-image {
+            position: relative;
+            display: block;
+            width: 100%;
+            height: 100%;
+            min-width: 0;
+            min-height: 0;
+            overflow: hidden;
+            background: var(--ink);
+        }
+
+        .preview-image img {
+            position: absolute;
+            inset: 0;
+            display: block;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            object-position: center;
+        }
+
         @media (max-width: 980px) {
             body {
                 overflow: auto;
@@ -546,6 +688,9 @@
         var pcbHeight = {{ pcb_height }};
         var tableData = {{ table_data | safe }};
         var componentData = {{ component_data | safe }};
+        var polarityData = {{ polarity_data | default('[]', true) | safe }};
+        var contourData = {{ contour_data | default('[]', true) | safe }};
+        var previewImages = {{ preview_images | default('[]', true) | safe }};
         var projectName = {{ project_name | tojson }};
         var reportEndpoint = "http://127.0.0.1:8765/api/report";
     </script>
@@ -573,6 +718,11 @@
                     <input type="range" id="zoomRange" min="35" max="220" value="100">
                 </label>
                 <span id="zoomValue" class="compact">100%</span>
+                <label for="markerSizeRange">
+                    Punkt
+                    <input type="range" id="markerSizeRange" min="75" max="180" step="5" value="100">
+                </label>
+                <span id="markerSizeValue" class="compact">100%</span>
                 <div class="rotation-group" aria-label="Obrót płytki">
                     <span>Obrót</span>
                     <button type="button" data-rotation="0">0</button>
@@ -587,9 +737,10 @@
                     <button type="button" data-marker="yellow">Ż</button>
                     <button type="button" data-marker="mono">K</button>
                 </div>
-                <button type="button" id="centerBtn">Centruj</button>
-                <button type="button" id="pointsBtn">Pokaż resztę</button>
                 <button type="button" id="labelsBtn">Opisy: ON</button>
+                <button type="button" id="polarityBtn">Polaryzacja: OFF</button>
+                <button type="button" id="contoursBtn">Kontur: ON</button>
+                <span id="previewButtons" class="preview-buttons"></span>
             </div>
 
             <div class="top-actions">
@@ -638,6 +789,8 @@
                         <div id="currentDesignators">-</div>
                     </div>
 
+                    <div id="polarityNotice" class="polarity-notice" hidden></div>
+
                     <label class="designators-box" for="operatorNotes">
                         <span class="field-label">Uwagi operatora</span>
                         <textarea id="operatorNotes"></textarea>
@@ -682,6 +835,22 @@
         </main>
     </div>
 
+    <div id="previewModal" class="preview-modal" hidden>
+        <div class="preview-dialog">
+            <div class="preview-head">
+                <div>
+                    <strong id="previewTitle">Podgląd</strong>
+                    <span id="previewSubtitle">{{ project_name }}</span>
+                </div>
+                <div id="previewSwitches" class="preview-switches"></div>
+                <button type="button" id="previewClose">Zamknij</button>
+            </div>
+            <div class="preview-image">
+                <img id="previewImage" alt="Podgląd operatora">
+            </div>
+        </div>
+    </div>
+
     <script>
         var currentIndex = 0;
         var autoTimer = null;
@@ -704,6 +873,7 @@
             currentIndexCode: document.getElementById('currentIndexCode'),
             currentQuantity: document.getElementById('currentQuantity'),
             currentDesignators: document.getElementById('currentDesignators'),
+            polarityNotice: document.getElementById('polarityNotice'),
             operatorNotes: document.getElementById('operatorNotes'),
             tableBody: document.getElementById('tableBody'),
             image: document.getElementById('pcb-image'),
@@ -712,11 +882,21 @@
             imageWrapper: document.getElementById('imageWrapper'),
             zoomRange: document.getElementById('zoomRange'),
             zoomValue: document.getElementById('zoomValue'),
+            markerSizeRange: document.getElementById('markerSizeRange'),
+            markerSizeValue: document.getElementById('markerSizeValue'),
             baseSeconds: document.getElementById('baseSeconds'),
             autoBtn: document.getElementById('autoBtn'),
             focusBtn: document.getElementById('focusBtn'),
-            pointsBtn: document.getElementById('pointsBtn'),
             labelsBtn: document.getElementById('labelsBtn'),
+            polarityBtn: document.getElementById('polarityBtn'),
+            contoursBtn: document.getElementById('contoursBtn'),
+            previewButtons: document.getElementById('previewButtons'),
+            previewModal: document.getElementById('previewModal'),
+            previewTitle: document.getElementById('previewTitle'),
+            previewSubtitle: document.getElementById('previewSubtitle'),
+            previewSwitches: document.getElementById('previewSwitches'),
+            previewImage: document.getElementById('previewImage'),
+            previewClose: document.getElementById('previewClose'),
             rotationButtons: Array.prototype.slice.call(document.querySelectorAll('[data-rotation]')),
             markerButtons: Array.prototype.slice.call(document.querySelectorAll('[data-marker]'))
         };
@@ -731,12 +911,15 @@
                     statuses: saved.statuses || {},
                     notes: saved.notes || {},
                     startedAt: saved.startedAt || Date.now(),
-                    showAllPoints: saved.showAllPoints !== false,
+                    showAllPoints: false,
                     showLabels: saved.showLabels !== false,
                     focusMode: saved.focusMode === true,
                     operatorZoom: saved.operatorZoom || 100,
+                    markerSize: clampMarkerSize(saved.markerSize || 100),
                     rotation: normalizeRotation(saved.rotation || 0),
-                    markerPalette: normalizeMarkerPalette(saved.markerPalette || 'magenta')
+                    markerPalette: normalizeMarkerPalette(saved.markerPalette || 'magenta'),
+                    showPolarity: saved.showPolarity === true,
+                    showContours: saved.showContours !== false
                 };
             } catch (error) {
                 return {
@@ -744,12 +927,15 @@
                     statuses: {},
                     notes: {},
                     startedAt: Date.now(),
-                    showAllPoints: true,
+                    showAllPoints: false,
                     showLabels: true,
                     focusMode: false,
                     operatorZoom: 100,
+                    markerSize: 100,
                     rotation: 0,
-                    markerPalette: 'magenta'
+                    markerPalette: 'magenta',
+                    showPolarity: false,
+                    showContours: true
                 };
             }
         }
@@ -768,6 +954,14 @@
                 return 0;
             }
             return Math.max(0, Math.min(tableData.length - 1, index));
+        }
+
+        function clampMarkerSize(value) {
+            var size = Number(value);
+            if (!Number.isFinite(size)) {
+                return 100;
+            }
+            return Math.round(Math.max(75, Math.min(180, size)));
         }
 
         function textValue(row, keys, fallback) {
@@ -859,11 +1053,49 @@
             els.operatorNotes.value = state.notes[currentIndex] !== undefined
                 ? state.notes[currentIndex]
                 : textValue(row, ['UWAGI'], '');
+            renderPolarityNotice(currentIndex);
 
             updateRows();
             updateProgress();
             applyZoomForCurrentStep();
             saveState();
+        }
+
+        function polarityForStep(index) {
+            var designators = new Set(getDesignators(index));
+            return polarityData.filter(function(item) {
+                return designators.has(String(item.Desygnator || '').trim());
+            });
+        }
+
+        function contoursForStep(index) {
+            var designators = new Set(getDesignators(index));
+            return contourData.filter(function(item) {
+                return (item.Desygnatory || []).some(function(designator) {
+                    return designators.has(String(designator || '').trim());
+                });
+            });
+        }
+
+        function renderPolarityNotice(index) {
+            if (!state.showPolarity) {
+                els.polarityNotice.hidden = true;
+                els.polarityNotice.innerHTML = '';
+                return;
+            }
+            var items = polarityForStep(index);
+            if (!items.length) {
+                els.polarityNotice.hidden = true;
+                els.polarityNotice.innerHTML = '';
+                return;
+            }
+            els.polarityNotice.hidden = false;
+            els.polarityNotice.innerHTML = [
+                '<strong>Uwaga: polaryzacja</strong>',
+                '<span>Sprawdź stronę + dla: ' + escapeHtml(items.map(function(item) {
+                    return item.Desygnator;
+                }).join(', ')) + '</span>'
+            ].join('');
         }
 
         function updateRows() {
@@ -997,17 +1229,28 @@
             return state.rotation === 90 || state.rotation === 270;
         }
 
+        function canvasBoardDimensions() {
+            var width = Math.max(1, numericValue(pcbWidth, 1));
+            var height = Math.max(1, numericValue(pcbHeight, 1));
+            if (isSidewaysRotation()) {
+                return {
+                    width: height,
+                    height: width
+                };
+            }
+            return {
+                width: width,
+                height: height
+            };
+        }
+
         function updateCanvasAspect() {
             if (!els.image.complete || !els.image.naturalWidth || !els.image.naturalHeight) {
                 return;
             }
-            if (isSidewaysRotation()) {
-                els.canvas.width = els.image.naturalHeight;
-                els.canvas.height = els.image.naturalWidth;
-            } else {
-                els.canvas.width = els.image.naturalWidth;
-                els.canvas.height = els.image.naturalHeight;
-            }
+            var dimensions = canvasBoardDimensions();
+            els.canvas.width = Math.round(dimensions.width * 10);
+            els.canvas.height = Math.round(dimensions.height * 10);
         }
 
         function getCanvasCssSize() {
@@ -1045,6 +1288,13 @@
                 x: baseX,
                 y: baseY
             };
+        }
+
+        function mapContourPointToCanvas(point, canvasWidth, canvasHeight) {
+            return mapComponentToCanvas({
+                X: numericValue(point.X, 0),
+                Y: numericValue(point.Y, 0)
+            }, canvasWidth, canvasHeight);
         }
 
         function drawPcbImage(ctx, canvasWidth, canvasHeight) {
@@ -1115,7 +1365,7 @@
             var x = point.x;
             var y = point.y;
             var pulse = (Math.sin((performance.now() + labelIndex * 160) / 320) + 1) / 2;
-            var markerScale = clamp(0.85 + (currentViewZoom - 60) / 150, 0.85, 1.6);
+            var markerScale = clamp(0.85 + (currentViewZoom - 60) / 150, 0.85, 1.6) * markerSizeScale();
             var pulseRadius = (11 + pulse * 5) * markerScale;
             var outerRadius = 8.5 * markerScale;
             var coreRadius = 7 * markerScale;
@@ -1147,6 +1397,96 @@
             ctx.arc(x, y, centerRadius, 0, Math.PI * 2);
             ctx.fillStyle = palette.center;
             ctx.fill();
+            ctx.restore();
+        }
+
+        function drawPolarityPoint(ctx, point, labelIndex) {
+            var markerScale = clamp(0.9 + (currentViewZoom - 60) / 160, 0.9, 1.55) * markerSizeScale();
+            var pulse = (Math.sin((performance.now() + labelIndex * 180) / 340) + 1) / 2;
+            var radius = 8.5 * markerScale;
+
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(point.x, point.y, (12 + pulse * 5) * markerScale, 0, Math.PI * 2);
+            ctx.lineWidth = 2.5 * markerScale;
+            ctx.strokeStyle = 'rgba(255, 176, 0, ' + (0.32 + pulse * 0.24) + ')';
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
+            ctx.fillStyle = '#ffb000';
+            ctx.fill();
+            ctx.lineWidth = 3 * markerScale;
+            ctx.strokeStyle = '#111827';
+            ctx.stroke();
+            ctx.lineWidth = 1.7 * markerScale;
+            ctx.strokeStyle = '#ffffff';
+            ctx.stroke();
+
+            ctx.font = '900 ' + Math.round(16 * markerScale) + 'px Arial, Helvetica, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle = '#111827';
+            ctx.fillText('+', point.x, point.y + 1);
+
+            if (state.showLabels) {
+                ctx.font = '900 12px Arial, Helvetica, sans-serif';
+                ctx.textAlign = 'left';
+                ctx.lineWidth = 4;
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+                ctx.strokeText(point.designator, point.x + radius + 5, point.y + 4);
+                ctx.fillStyle = '#8a4f00';
+                ctx.fillText(point.designator, point.x + radius + 5, point.y + 4);
+            }
+            ctx.restore();
+        }
+
+        function drawContour(ctx, contour, canvasWidth, canvasHeight) {
+            var points = (contour.Punkty || []).map(function(point) {
+                return mapContourPointToCanvas(point, canvasWidth, canvasHeight);
+            });
+            if (points.length < 3) {
+                return;
+            }
+
+            ctx.save();
+            ctx.beginPath();
+            ctx.moveTo(points[0].x, points[0].y);
+            points.slice(1).forEach(function(point) {
+                ctx.lineTo(point.x, point.y);
+            });
+            ctx.closePath();
+            ctx.fillStyle = contour.Inferowany ? 'rgba(255, 204, 0, 0.06)' : 'rgba(255, 204, 0, 0.09)';
+            ctx.strokeStyle = 'rgba(255, 204, 0, 0.96)';
+            ctx.lineWidth = 3;
+            if (contour.Inferowany) {
+                ctx.setLineDash([8, 5]);
+            }
+            ctx.fill();
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            if (state.showLabels) {
+                var xs = points.map(function(point) { return point.x; });
+                var ys = points.map(function(point) { return point.y; });
+                var centerX = (Math.min.apply(null, xs) + Math.max.apply(null, xs)) / 2;
+                var topY = Math.min.apply(null, ys);
+                var label = (contour.Desygnatory || []).slice(0, 3).join(',');
+                if (label) {
+                    ctx.font = '900 11px Arial, Helvetica, sans-serif';
+                    var textWidth = ctx.measureText(label).width;
+                    var labelWidth = Math.max(24, textWidth + 10);
+                    var labelX = clamp(centerX - labelWidth / 2, 4, Math.max(4, canvasWidth - labelWidth - 4));
+                    var labelY = clamp(topY - 22, 4, Math.max(4, canvasHeight - 18));
+                    ctx.fillStyle = '#07101f';
+                    roundedLabelPath(ctx, labelX, labelY, labelWidth, 16, 3);
+                    ctx.fill();
+                    ctx.fillStyle = '#fff4b8';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(label, labelX + labelWidth / 2, labelY + 8);
+                }
+            }
             ctx.restore();
         }
 
@@ -1287,6 +1627,12 @@
             var activeDesignators = new Set(getDesignators(currentIndex));
             var activePoints = [];
 
+            if (state.showContours) {
+                contoursForStep(currentIndex).forEach(function(contour) {
+                    drawContour(ctx, contour, width, height);
+                });
+            }
+
             componentData.forEach(function(component) {
                 var designator = String(component.Desygnator || '').trim();
                 var isActive = activeDesignators.has(designator);
@@ -1306,6 +1652,16 @@
             if (state.showLabels) {
                 activePoints.forEach(function(point, index) {
                     drawLabel(ctx, point.designator, point.x, point.y, index, width, height, placedLabels);
+                });
+            }
+            if (state.showPolarity) {
+                polarityForStep(currentIndex).forEach(function(item, index) {
+                    var point = mapComponentToCanvas(item, width, height);
+                    drawPolarityPoint(ctx, {
+                        designator: String(item.Desygnator || '').trim(),
+                        x: point.x,
+                        y: point.y
+                    }, index);
                 });
             }
         }
@@ -1341,7 +1697,7 @@
             }
             var designators = new Set(getDesignators(currentIndex));
 
-            return componentData.filter(function(component) {
+            var points = componentData.filter(function(component) {
                 return designators.has(String(component.Desygnator || '').trim());
             }).map(function(component) {
                 var point = mapComponentToCanvas(component, size.width, size.height);
@@ -1351,6 +1707,15 @@
                     y: point.y
                 };
             });
+
+            if (state.showContours) {
+                contoursForStep(currentIndex).forEach(function(contour) {
+                    (contour.Punkty || []).forEach(function(corner) {
+                        points.push(mapContourPointToCanvas(corner, size.width, size.height));
+                    });
+                });
+            }
+            return points;
         }
 
         function getPointBounds(points) {
@@ -1383,6 +1748,13 @@
             } else {
                 els.zoomValue.textContent = zoom + '%';
             }
+        }
+
+        function markerSizeScale() {
+            state.markerSize = clampMarkerSize(state.markerSize || 100);
+            els.markerSizeRange.value = String(state.markerSize);
+            els.markerSizeValue.textContent = state.markerSize + '%';
+            return state.markerSize / 100;
         }
 
         function calculateFitZoom(baseZoom) {
@@ -1428,10 +1800,12 @@
         function updateViewModes() {
             document.body.classList.toggle('focus-mode', state.focusMode);
             els.focusBtn.classList.toggle('active', state.focusMode);
-            els.pointsBtn.classList.toggle('active', state.showAllPoints);
             els.labelsBtn.classList.toggle('active', state.showLabels);
-            els.pointsBtn.textContent = state.showAllPoints ? 'Reszta: ON' : 'Reszta: OFF';
+            els.polarityBtn.classList.toggle('active', state.showPolarity);
+            els.contoursBtn.classList.toggle('active', state.showContours);
             els.labelsBtn.textContent = state.showLabels ? 'Opisy: ON' : 'Opisy: OFF';
+            els.polarityBtn.textContent = state.showPolarity ? 'Polaryzacja: ON' : 'Polaryzacja: OFF';
+            els.contoursBtn.textContent = state.showContours ? 'Kontur: ON' : 'Kontur: OFF';
             updateRotationButtons();
             updateMarkerButtons();
             requestAnimationFrame(function() {
@@ -1454,6 +1828,20 @@
         function toggleLabels() {
             state.showLabels = !state.showLabels;
             saveState();
+            updateViewModes();
+        }
+
+        function togglePolarity() {
+            state.showPolarity = !state.showPolarity;
+            saveState();
+            renderCurrent();
+            updateViewModes();
+        }
+
+        function toggleContours() {
+            state.showContours = !state.showContours;
+            saveState();
+            renderCurrent();
             updateViewModes();
         }
 
@@ -1569,8 +1957,11 @@
                 startedAt: Date.now(),
                 showAllPoints: state.showAllPoints,
                 showLabels: state.showLabels,
+                showPolarity: state.showPolarity,
+                showContours: state.showContours,
                 focusMode: state.focusMode,
                 operatorZoom: state.operatorZoom,
+                markerSize: state.markerSize,
                 rotation: state.rotation,
                 markerPalette: state.markerPalette
             };
@@ -1591,6 +1982,47 @@
             });
         }
 
+        function renderPreviewButtons() {
+            if (!previewImages.length) {
+                els.previewButtons.hidden = true;
+                return;
+            }
+            els.previewButtons.innerHTML = previewImages.map(function(item) {
+                return '<button type="button" data-preview-image="' + escapeHtml(item.key) + '">' + escapeHtml(item.label) + '</button>';
+            }).join('');
+            Array.prototype.slice.call(els.previewButtons.querySelectorAll('[data-preview-image]')).forEach(function(button) {
+                button.addEventListener('click', function() {
+                    openPreview(button.dataset.previewImage);
+                });
+            });
+        }
+
+        function openPreview(key) {
+            var selected = previewImages.find(function(item) {
+                return item.key === key;
+            }) || previewImages[0];
+            if (!selected) {
+                return;
+            }
+            els.previewTitle.textContent = selected.label;
+            els.previewSubtitle.textContent = projectName;
+            els.previewImage.src = selected.image;
+            els.previewSwitches.innerHTML = previewImages.map(function(item) {
+                return '<button type="button" class="' + (item.key === selected.key ? 'active' : '') + '" data-preview-switch="' + escapeHtml(item.key) + '">' + escapeHtml(item.label) + '</button>';
+            }).join('');
+            Array.prototype.slice.call(els.previewSwitches.querySelectorAll('[data-preview-switch]')).forEach(function(button) {
+                button.addEventListener('click', function() {
+                    openPreview(button.dataset.previewSwitch);
+                });
+            });
+            els.previewModal.hidden = false;
+        }
+
+        function closePreview() {
+            els.previewModal.hidden = true;
+            els.previewImage.removeAttribute('src');
+        }
+
         function updateElapsed() {
             var seconds = Math.round((Date.now() - state.startedAt) / 1000);
             var minutes = Math.floor(seconds / 60);
@@ -1607,6 +2039,7 @@
         }
 
         function bindEvents() {
+            renderPreviewButtons();
             document.getElementById('doneBtn').addEventListener('click', function() { mark('done', true); });
             document.getElementById('problemBtn').addEventListener('click', function() { mark('problem', false); });
             document.getElementById('skipBtn').addEventListener('click', function() { mark('skipped', true); });
@@ -1614,12 +2047,18 @@
             document.getElementById('nextBtn').addEventListener('click', function() { move(1); });
             document.getElementById('autoBtn').addEventListener('click', startAuto);
             document.getElementById('pauseBtn').addEventListener('click', stopAuto);
-            document.getElementById('centerBtn').addEventListener('click', centerOnCurrent);
             document.getElementById('exportBtn').addEventListener('click', exportReport);
             document.getElementById('resetBtn').addEventListener('click', resetProgress);
             document.getElementById('focusBtn').addEventListener('click', toggleFocusMode);
-            document.getElementById('pointsBtn').addEventListener('click', toggleAllPoints);
             document.getElementById('labelsBtn').addEventListener('click', toggleLabels);
+            document.getElementById('polarityBtn').addEventListener('click', togglePolarity);
+            document.getElementById('contoursBtn').addEventListener('click', toggleContours);
+            els.previewClose.addEventListener('click', closePreview);
+            els.previewModal.addEventListener('click', function(event) {
+                if (event.target === els.previewModal) {
+                    closePreview();
+                }
+            });
             els.rotationButtons.forEach(function(button) {
                 button.addEventListener('click', function() {
                     setRotation(button.dataset.rotation);
@@ -1642,6 +2081,12 @@
                 saveState();
                 applyZoomForCurrentStep();
             });
+            els.markerSizeRange.addEventListener('input', function(event) {
+                state.markerSize = clampMarkerSize(event.target.value);
+                markerSizeScale();
+                saveState();
+                drawComponents();
+            });
             els.operatorNotes.addEventListener('input', function() {
                 state.notes[currentIndex] = els.operatorNotes.value;
                 saveState();
@@ -1650,6 +2095,11 @@
                 applyZoomForCurrentStep();
             });
             document.addEventListener('keydown', function(event) {
+                if (event.key === 'Escape' && !els.previewModal.hidden) {
+                    event.preventDefault();
+                    closePreview();
+                    return;
+                }
                 var tag = event.target.tagName.toLowerCase();
                 if (tag === 'input' || tag === 'textarea') {
                     return;
@@ -1675,9 +2125,6 @@
                 } else if (event.key.toLowerCase() === 'f') {
                     event.preventDefault();
                     toggleFocusMode();
-                } else if (event.key.toLowerCase() === 'o') {
-                    event.preventDefault();
-                    toggleAllPoints();
                 } else if (event.key.toLowerCase() === 'l') {
                     event.preventDefault();
                     toggleLabels();
@@ -1701,7 +2148,9 @@
             renderTable();
             updateViewModes();
             state.operatorZoom = sanitizeZoom(state.operatorZoom || 100);
+            state.markerSize = clampMarkerSize(state.markerSize || 100);
             els.zoomRange.value = String(state.operatorZoom);
+            markerSizeScale();
             renderCurrent();
             updateElapsed();
             elapsedTimer = setInterval(updateElapsed, 1000);

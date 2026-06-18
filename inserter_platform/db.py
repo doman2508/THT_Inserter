@@ -59,7 +59,10 @@ def init_db() -> None:
                 board_width REAL,
                 board_height REAL,
                 board_image_path TEXT,
+                tht_preview_image_path TEXT,
+                labeling_preview_image_path TEXT,
                 board_calibration_json TEXT NOT NULL DEFAULT '',
+                board_contours_json TEXT NOT NULL DEFAULT '',
                 status TEXT NOT NULL DEFAULT 'draft',
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
@@ -149,6 +152,26 @@ def init_db() -> None:
                 UNIQUE(project_id, designator)
             );
 
+            CREATE TABLE IF NOT EXISTS component_polarity (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id TEXT NOT NULL,
+                designator TEXT NOT NULL,
+                required INTEGER NOT NULL DEFAULT 0,
+                plus_x REAL,
+                plus_y REAL,
+                pdf_x REAL,
+                pdf_y REAL,
+                pdf_page_width REAL,
+                pdf_page_height REAL,
+                source TEXT NOT NULL DEFAULT '',
+                confidence REAL,
+                note TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE,
+                UNIQUE(project_id, designator)
+            );
+
             CREATE TABLE IF NOT EXISTS project_imports (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 project_id TEXT NOT NULL,
@@ -178,6 +201,9 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_component_points_project
                 ON component_points(project_id);
 
+            CREATE INDEX IF NOT EXISTS idx_component_polarity_project
+                ON component_polarity(project_id, required, designator);
+
             CREATE INDEX IF NOT EXISTS idx_project_imports_project
                 ON project_imports(project_id);
 
@@ -191,8 +217,14 @@ def init_db() -> None:
         project_columns = {row["name"] for row in db.execute("PRAGMA table_info(projects)").fetchall()}
         if "board_image_path" not in project_columns:
             db.execute("ALTER TABLE projects ADD COLUMN board_image_path TEXT")
+        if "tht_preview_image_path" not in project_columns:
+            db.execute("ALTER TABLE projects ADD COLUMN tht_preview_image_path TEXT")
+        if "labeling_preview_image_path" not in project_columns:
+            db.execute("ALTER TABLE projects ADD COLUMN labeling_preview_image_path TEXT")
         if "board_calibration_json" not in project_columns:
             db.execute("ALTER TABLE projects ADD COLUMN board_calibration_json TEXT NOT NULL DEFAULT ''")
+        if "board_contours_json" not in project_columns:
+            db.execute("ALTER TABLE projects ADD COLUMN board_contours_json TEXT NOT NULL DEFAULT ''")
         step_columns = {row["name"] for row in db.execute("PRAGMA table_info(placement_steps)").fetchall()}
         if "segments_json" not in step_columns:
             db.execute("ALTER TABLE placement_steps ADD COLUMN segments_json TEXT NOT NULL DEFAULT ''")
@@ -292,10 +324,52 @@ def normalize_board_calibration(value: dict[str, Any] | str | None) -> dict[str,
     if rotation not in {0, 90, 180, 270}:
         rotation = 0
 
+    def number(name: str, fallback: float) -> float:
+        try:
+            return float(value.get(name))
+        except (TypeError, ValueError):
+            return fallback
+
+    offset_x = number("offsetX", 0.0)
+    offset_y = number("offsetY", 0.0)
+    scale_x = number("scaleX", 1.0)
+    scale_y = number("scaleY", 1.0)
+    if scale_x <= 0:
+        scale_x = 1.0
+    if scale_y <= 0:
+        scale_y = 1.0
+
     return {
         "rotation": rotation,
         "flipX": bool(value.get("flipX")),
         "flipY": bool(value.get("flipY")),
+        "offsetX": max(-50.0, min(50.0, offset_x)),
+        "offsetY": max(-50.0, min(50.0, offset_y)),
+        "scaleX": max(0.2, min(3.0, scale_x)),
+        "scaleY": max(0.2, min(3.0, scale_y)),
+    }
+
+
+def normalize_board_contours(value: dict[str, Any] | str | None) -> dict[str, Any]:
+    if isinstance(value, str):
+        try:
+            value = json.loads(value) if value.strip() else {}
+        except json.JSONDecodeError:
+            value = {}
+    if not isinstance(value, dict):
+        value = {}
+
+    profile = value.get("profile") if isinstance(value.get("profile"), dict) else {}
+    contours = value.get("contours") if isinstance(value.get("contours"), list) else []
+    assignments = value.get("assignments") if isinstance(value.get("assignments"), list) else []
+    summary = value.get("summary") if isinstance(value.get("summary"), dict) else {}
+    return {
+        "source": str(value.get("source") or ""),
+        "profile": profile,
+        "silkscreen": value.get("silkscreen") if isinstance(value.get("silkscreen"), dict) else {},
+        "contours": contours,
+        "assignments": assignments,
+        "summary": summary,
     }
 
 
@@ -304,7 +378,9 @@ def project_row_to_dict(row: sqlite3.Row | None) -> dict[str, Any] | None:
     if project is None:
         return None
     project["board_calibration"] = normalize_board_calibration(project.get("board_calibration_json"))
+    project["board_contours"] = normalize_board_contours(project.get("board_contours_json"))
     project.pop("board_calibration_json", None)
+    project.pop("board_contours_json", None)
     return project
 
 
@@ -315,6 +391,12 @@ def step_row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
         item["segments"] = json.loads(raw_segments) if raw_segments else []
     except json.JSONDecodeError:
         item["segments"] = []
+    return item
+
+
+def polarity_row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
+    item = dict(row)
+    item["required"] = bool(item.get("required"))
     return item
 
 
@@ -596,6 +678,13 @@ def get_project(project_id: str) -> dict[str, Any] | None:
                 (project_id,),
             ).fetchall()
         ]
+        project["polarity"] = [
+            polarity_row_to_dict(row)
+            for row in db.execute(
+                "SELECT * FROM component_polarity WHERE project_id = ? ORDER BY designator",
+                (project_id,),
+            ).fetchall()
+        ]
         project["operator_step_statuses"] = [
             dict(row)
             for row in db.execute(
@@ -761,6 +850,39 @@ def update_project_board_image(project_id: str, board_image_path: str) -> dict[s
     return project
 
 
+def update_project_preview_images(
+    project_id: str,
+    *,
+    tht_preview_image_path: str | None = None,
+    labeling_preview_image_path: str | None = None,
+) -> dict[str, Any] | None:
+    fields: list[str] = []
+    values: list[Any] = []
+    if tht_preview_image_path is not None:
+        fields.append("tht_preview_image_path = ?")
+        values.append(tht_preview_image_path)
+    if labeling_preview_image_path is not None:
+        fields.append("labeling_preview_image_path = ?")
+        values.append(labeling_preview_image_path)
+    if not fields:
+        return get_project(project_id)
+
+    timestamp = now_iso()
+    values.extend([timestamp, project_id])
+    with connect() as db:
+        cursor = db.execute(
+            f"""
+            UPDATE projects
+            SET {", ".join(fields)}, updated_at = ?
+            WHERE id = ?
+            """,
+            values,
+        )
+        if cursor.rowcount == 0:
+            return None
+    return get_project(project_id)
+
+
 def update_project_board_calibration(project_id: str, calibration: dict[str, Any]) -> dict[str, Any] | None:
     timestamp = now_iso()
     clean_calibration = normalize_board_calibration(calibration)
@@ -778,6 +900,261 @@ def update_project_board_calibration(project_id: str, calibration: dict[str, Any
     return get_project(project_id)
 
 
+def update_project_board_contours(
+    project_id: str,
+    contours: dict[str, Any],
+    *,
+    update_board_size: bool = False,
+) -> dict[str, Any] | None:
+    timestamp = now_iso()
+    clean_contours = normalize_board_contours(contours)
+    profile = clean_contours.get("profile") if isinstance(clean_contours.get("profile"), dict) else {}
+    with connect() as db:
+        if db.execute("SELECT 1 FROM projects WHERE id = ?", (project_id,)).fetchone() is None:
+            return None
+        if update_board_size and profile.get("width") and profile.get("height"):
+            db.execute(
+                """
+                UPDATE projects
+                SET board_contours_json = ?, board_width = ?, board_height = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    json.dumps(clean_contours, ensure_ascii=False),
+                    float(profile["width"]),
+                    float(profile["height"]),
+                    timestamp,
+                    project_id,
+                ),
+            )
+        else:
+            db.execute(
+                """
+                UPDATE projects
+                SET board_contours_json = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (json.dumps(clean_contours, ensure_ascii=False), timestamp, project_id),
+            )
+        summary = clean_contours.get("summary") if isinstance(clean_contours.get("summary"), dict) else {}
+        append_project_change(
+            db,
+            project_id,
+            "gerber_contours",
+            (
+                "Zaimportowano kontury Gerber: "
+                f"{summary.get('contours', 0)} kandydatów, "
+                f"{summary.get('assigned', 0)} przypisań."
+            ),
+            timestamp,
+        )
+    return get_project(project_id)
+
+
+def project_designator_set(db: sqlite3.Connection, project_id: str) -> set[str]:
+    designators = {
+        str(row["designator"] or "").strip().upper()
+        for row in db.execute(
+            "SELECT designator FROM component_points WHERE project_id = ?",
+            (project_id,),
+        ).fetchall()
+        if str(row["designator"] or "").strip()
+    }
+    for row in db.execute(
+        "SELECT designators FROM placement_steps WHERE project_id = ?",
+        (project_id,),
+    ).fetchall():
+        designators.update(split_designators(str(row["designators"] or "")))
+    return designators
+
+
+def import_polarity_candidates(
+    project_id: str,
+    candidates: list[dict[str, Any]],
+    source: str = "fab_pdf",
+) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+    timestamp = now_iso()
+    imported = 0
+    updated = 0
+    skipped = 0
+    auto_plus = 0
+    matched: list[str] = []
+
+    with connect() as db:
+        if db.execute("SELECT 1 FROM projects WHERE id = ?", (project_id,)).fetchone() is None:
+            return None, {}
+
+        valid_designators = project_designator_set(db, project_id)
+        existing_rows = db.execute(
+            "SELECT designator, required, plus_x, plus_y, source FROM component_polarity WHERE project_id = ?",
+            (project_id,),
+        ).fetchall()
+        existing_by_designator = {str(row["designator"]).upper(): dict(row) for row in existing_rows}
+        seen: set[str] = set()
+
+        for candidate in candidates:
+            designator = str(candidate.get("designator") or "").strip().upper()
+            if not designator or designator in seen:
+                skipped += 1
+                continue
+            seen.add(designator)
+            if valid_designators and designator not in valid_designators:
+                skipped += 1
+                continue
+            candidate_plus_x = candidate.get("plus_x")
+            candidate_plus_y = candidate.get("plus_y")
+            has_auto_plus = candidate_plus_x is not None and candidate_plus_y is not None
+            if has_auto_plus:
+                auto_plus += 1
+
+            existing = existing_by_designator.get(designator)
+            if existing:
+                preserve_manual_plus = (
+                    str(existing.get("source") or "").strip().lower() == "manual"
+                    and existing.get("plus_x") is not None
+                    and existing.get("plus_y") is not None
+                )
+                next_plus_x = existing.get("plus_x") if preserve_manual_plus else candidate_plus_x
+                next_plus_y = existing.get("plus_y") if preserve_manual_plus else candidate_plus_y
+                next_source = str(existing.get("source") or "") if preserve_manual_plus else source.strip()
+                next_required = 1 if has_auto_plus else int(existing.get("required") or 0)
+                db.execute(
+                    """
+                    UPDATE component_polarity
+                    SET required = ?,
+                        plus_x = ?,
+                        plus_y = ?,
+                        pdf_x = ?,
+                        pdf_y = ?,
+                        pdf_page_width = ?,
+                        pdf_page_height = ?,
+                        source = ?,
+                        confidence = ?,
+                        updated_at = ?
+                    WHERE project_id = ? AND designator = ?
+                    """,
+                    (
+                        next_required,
+                        next_plus_x,
+                        next_plus_y,
+                        candidate.get("pdf_x"),
+                        candidate.get("pdf_y"),
+                        candidate.get("pdf_page_width"),
+                        candidate.get("pdf_page_height"),
+                        next_source,
+                        candidate.get("confidence"),
+                        timestamp,
+                        project_id,
+                        designator,
+                    ),
+                )
+                updated += 1
+            else:
+                db.execute(
+                    """
+                    INSERT INTO component_polarity
+                        (project_id, designator, required, plus_x, plus_y, pdf_x, pdf_y, pdf_page_width,
+                         pdf_page_height, source, confidence, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        project_id,
+                        designator,
+                        1 if has_auto_plus else 0,
+                        candidate_plus_x,
+                        candidate_plus_y,
+                        candidate.get("pdf_x"),
+                        candidate.get("pdf_y"),
+                        candidate.get("pdf_page_width"),
+                        candidate.get("pdf_page_height"),
+                        source.strip(),
+                        candidate.get("confidence"),
+                        timestamp,
+                        timestamp,
+                    ),
+                )
+                imported += 1
+            matched.append(designator)
+
+        append_project_change(
+            db,
+            project_id,
+            "polarity_import",
+            f"Zaimportowano kandydatow polaryzacji z PDF: {imported} nowych, {updated} odswiezonych.",
+            timestamp,
+        )
+        db.execute("UPDATE projects SET updated_at = ? WHERE id = ?", (timestamp, project_id))
+
+    return get_project(project_id), {
+        "imported": imported,
+        "updated": updated,
+        "skipped": skipped,
+        "autoPlus": auto_plus,
+        "matchedDesignators": matched,
+        "source": source,
+    }
+
+
+def update_component_polarity(
+    project_id: str,
+    designator: str,
+    *,
+    required: bool,
+    plus_x: float | None,
+    plus_y: float | None,
+    note: str = "",
+) -> dict[str, Any] | None:
+    clean_designator = str(designator or "").strip().upper()
+    if not clean_designator:
+        raise ValueError("Desygnator jest wymagany.")
+
+    timestamp = now_iso()
+    with connect() as db:
+        if db.execute("SELECT 1 FROM projects WHERE id = ?", (project_id,)).fetchone() is None:
+            return None
+
+        existing = db.execute(
+            "SELECT 1 FROM component_polarity WHERE project_id = ? AND designator = ?",
+            (project_id, clean_designator),
+        ).fetchone()
+        if existing:
+            db.execute(
+                """
+                UPDATE component_polarity
+                SET required = ?,
+                    plus_x = ?,
+                    plus_y = ?,
+                    note = ?,
+                    source = 'manual',
+                    updated_at = ?
+                WHERE project_id = ? AND designator = ?
+                """,
+                (1 if required else 0, plus_x, plus_y, note.strip(), timestamp, project_id, clean_designator),
+            )
+        else:
+            db.execute(
+                """
+                INSERT INTO component_polarity
+                    (project_id, designator, required, plus_x, plus_y, note, source, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, 'manual', ?, ?)
+                """,
+                (
+                    project_id,
+                    clean_designator,
+                    1 if required else 0,
+                    plus_x,
+                    plus_y,
+                    note.strip(),
+                    timestamp,
+                    timestamp,
+                ),
+            )
+        append_project_change(db, project_id, "polarity_update", f"Zmieniono polaryzacje {clean_designator}.", timestamp)
+        db.execute("UPDATE projects SET updated_at = ? WHERE id = ?", (timestamp, project_id))
+
+    return get_project(project_id)
+
+
 def update_project(
     project_id: str,
     *,
@@ -788,6 +1165,12 @@ def update_project(
 ) -> dict[str, Any] | None:
     timestamp = now_iso()
     with connect() as db:
+        current = db.execute(
+            "SELECT status FROM projects WHERE id = ?",
+            (project_id,),
+        ).fetchone()
+        if current is None:
+            return None
         cursor = db.execute(
             """
             UPDATE projects
@@ -798,6 +1181,16 @@ def update_project(
         )
         if cursor.rowcount == 0:
             return None
+        previous_status = str(current["status"] or "")
+        new_status = status.strip()
+        if previous_status != new_status:
+            append_project_change(
+                db,
+                project_id,
+                "project_status",
+                f"Zmieniono status projektu: {previous_status or '-'} -> {new_status or '-'}.",
+                timestamp,
+            )
     return get_project(project_id)
 
 
@@ -1265,7 +1658,12 @@ def move_step_units(
     return get_project(project_id)
 
 
-def merge_steps(project_id: str, step_ids: list[Any], note: str = "") -> dict[str, Any] | None:
+def merge_steps(
+    project_id: str,
+    step_ids: list[Any],
+    note: str = "",
+    allow_mixed: bool = False,
+) -> dict[str, Any] | None:
     clean_ids = list(dict.fromkeys(int(step_id) for step_id in step_ids if str(step_id).strip().isdigit()))
     if len(clean_ids) < 2:
         raise ValueError("Wybierz przynajmniej dwie linie do scalenia.")
@@ -1288,9 +1686,9 @@ def merge_steps(project_id: str, step_ids: list[Any], note: str = "") -> dict[st
         value_key = normalize_line_key(first["value"])
         medcom_key = normalize_medcom_index(first["medcom_index"])
         for row in rows[1:]:
-            if normalize_line_key(row["value"]) != value_key:
+            if not allow_mixed and normalize_line_key(row["value"]) != value_key:
                 raise ValueError("Scalane linie musza miec te sama wartosc.")
-            if normalize_medcom_index(row["medcom_index"]) != medcom_key:
+            if not allow_mixed and normalize_medcom_index(row["medcom_index"]) != medcom_key:
                 raise ValueError("Scalane linie musza miec ten sam indeks Medcom.")
 
         merged_units: list[dict[str, Any]] = []
@@ -1300,7 +1698,23 @@ def merge_steps(project_id: str, step_ids: list[Any], note: str = "") -> dict[st
             for part in [item.strip() for item in note_without_segments(str(row["notes"] or "")).split("|") if item.strip()]:
                 if part not in note_parts:
                     note_parts.append(part)
-        note_parts.append("Scalone w edycji PRO")
+            if allow_mixed and row["id"] != first["id"]:
+                row_value = str(row["value"] or "").strip()
+                row_index = str(row["medcom_index"] or "").strip()
+                source_parts = []
+                if row_value and normalize_line_key(row_value) != value_key:
+                    source_parts.append(row_value)
+                if row_index and normalize_medcom_index(row_index) != medcom_key:
+                    source_parts.append(f"indeks {row_index}")
+                if source_parts:
+                    unit_labels = [
+                        str(unit.get("label") or "+".join(unit.get("designators") or [])).strip()
+                        for unit in step_units_from_row(row)
+                        if str(unit.get("label") or "+".join(unit.get("designators") or [])).strip()
+                    ]
+                    label = ", ".join(unit_labels) or str(row["designators"] or "").strip()
+                    note_parts.append(f"{label}: {' / '.join(source_parts)}")
+        note_parts.append("Scalone technologicznie w edycji PRO" if allow_mixed else "Scalone w edycji PRO")
         if note.strip():
             note_parts.append(note.strip())
         fields = line_fields_from_units(first, merged_units, notes=" | ".join(dict.fromkeys(note_parts)))
@@ -1338,7 +1752,9 @@ def merge_steps(project_id: str, step_ids: list[Any], note: str = "") -> dict[st
             db,
             project_id,
             "step_merge",
-            f"Scalono {len(rows)} linie: {fields['designators']}.",
+            f"Scalono technologicznie {len(rows)} linie: {fields['designators']}."
+            if allow_mixed
+            else f"Scalono {len(rows)} linie: {fields['designators']}.",
             timestamp,
         )
         db.execute("UPDATE projects SET status = 'prepared', updated_at = ? WHERE id = ?", (timestamp, project_id))

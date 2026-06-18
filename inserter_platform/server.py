@@ -10,8 +10,10 @@ from pathlib import Path
 from urllib.parse import quote, unquote, urlparse
 
 from . import db
+from . import gerber
 from . import html_exporter
 from . import importer
+from . import polarity
 
 
 HOST = os.environ.get("INSERTER_PLATFORM_HOST", "127.0.0.1")
@@ -20,6 +22,8 @@ STATIC_DIR = Path(__file__).parent / "static"
 UPLOAD_DIR = Path(os.environ.get("INSERTER_UPLOAD_DIR", Path("data") / "uploads"))
 MAX_BODY_BYTES = 60 * 1024 * 1024
 ALLOWED_BOARD_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
+ALLOWED_PDF_EXTENSIONS = {".pdf"}
+ALLOWED_GERBER_EXTENSIONS = {".gbr", ".gbx", ".gko", ".gk", ".gtl", ".gts", ".gto"}
 
 
 class ApiError(Exception):
@@ -56,7 +60,7 @@ def parse_header_parameters(value: str) -> dict[str, str]:
     return parameters
 
 
-def save_board_image(project_id: str, upload: dict[str, object] | None) -> str | None:
+def save_project_image(project_id: str, upload: dict[str, object] | None, prefix: str) -> str | None:
     if not upload:
         return None
     filename = str(upload.get("filename") or "").strip()
@@ -71,12 +75,41 @@ def save_board_image(project_id: str, upload: dict[str, object] | None) -> str |
 
     project_upload_dir = UPLOAD_DIR / project_id
     project_upload_dir.mkdir(parents=True, exist_ok=True)
-    for existing in project_upload_dir.glob("board*"):
+    for existing in project_upload_dir.glob(f"{prefix}*"):
         if existing.is_file() and existing.suffix.lower() in ALLOWED_BOARD_IMAGE_EXTENSIONS:
             existing.unlink(missing_ok=True)
-    target = project_upload_dir / f"board_{time.time_ns()}{extension}"
+    target = project_upload_dir / f"{prefix}_{time.time_ns()}{extension}"
     target.write_bytes(content)
     return target.as_posix()
+
+
+def save_board_image(project_id: str, upload: dict[str, object] | None) -> str | None:
+    return save_project_image(project_id, upload, "board")
+
+
+def require_pdf_upload(upload: dict[str, object] | None) -> bytes:
+    if not upload:
+        raise ApiError(400, "PDF file is required")
+    filename = str(upload.get("filename") or "").strip()
+    content = bytes(upload.get("content") or b"")
+    if not filename or not content:
+        raise ApiError(400, "PDF file is required")
+    if Path(filename).suffix.lower() not in ALLOWED_PDF_EXTENSIONS:
+        raise ApiError(400, "Unsupported file type. Allowed: .pdf")
+    return content
+
+
+def require_gerber_upload(upload: dict[str, object] | None, label: str) -> bytes:
+    if not upload:
+        raise ApiError(400, f"{label} file is required")
+    filename = str(upload.get("filename") or "").strip()
+    content = bytes(upload.get("content") or b"")
+    if not filename or not content:
+        raise ApiError(400, f"{label} file is required")
+    if Path(filename).suffix.lower() not in ALLOWED_GERBER_EXTENSIONS:
+        allowed = ", ".join(sorted(ALLOWED_GERBER_EXTENSIONS))
+        raise ApiError(400, f"Unsupported Gerber file type. Allowed: {allowed}")
+    return content
 
 
 def remove_project_uploads(project_id: str) -> None:
@@ -347,6 +380,75 @@ class PlatformHandler(BaseHTTPRequestHandler):
                 self.send_json(200, {"project": project})
                 return
 
+            if path.startswith("/api/projects/") and path.endswith("/preview-images"):
+                project_id = path.split("/")[3]
+                if not db.get_project(project_id):
+                    raise ApiError(404, "Project not found")
+                fields, files = self.read_multipart()
+                tht_preview_image_path = save_project_image(project_id, files.get("thtPreviewImage"), "preview_tht")
+                labeling_preview_image_path = save_project_image(
+                    project_id,
+                    files.get("labelingPreviewImage"),
+                    "preview_labeling",
+                )
+                if not tht_preview_image_path and not labeling_preview_image_path:
+                    raise ApiError(400, "At least one preview image file is required")
+                project = db.update_project_preview_images(
+                    project_id,
+                    tht_preview_image_path=tht_preview_image_path,
+                    labeling_preview_image_path=labeling_preview_image_path,
+                )
+                if not project:
+                    raise ApiError(404, "Project not found")
+                self.send_json(200, {"project": project})
+                return
+
+            if path.startswith("/api/projects/") and path.endswith("/gerber-contours"):
+                project_id = path.split("/")[3]
+                project = db.get_project(project_id)
+                if not project:
+                    raise ApiError(404, "Project not found")
+                fields, files = self.read_multipart()
+                silkscreen_bytes = require_gerber_upload(files.get("silkscreenGerber"), "Silkscreen Gerber")
+                profile_upload = files.get("profileGerber")
+                profile_bytes = None
+                if profile_upload and profile_upload.get("content"):
+                    profile_bytes = require_gerber_upload(profile_upload, "Profile Gerber")
+                try:
+                    overlay = gerber.build_contour_overlay(
+                        profile_bytes=profile_bytes,
+                        silkscreen_bytes=silkscreen_bytes,
+                        points=list(project.get("points") or []),
+                    )
+                except ValueError as error:
+                    raise ApiError(400, str(error)) from error
+                project = db.update_project_board_contours(
+                    project_id,
+                    overlay,
+                    update_board_size=str(fields.get("updateBoardSize") or "").lower() in {"1", "true", "on", "yes"},
+                )
+                if not project:
+                    raise ApiError(404, "Project not found")
+                self.send_json(200, {"project": project, "summary": overlay.get("summary", {})})
+                return
+
+            if path.startswith("/api/projects/") and path.endswith("/polarity/import-fab-pdf"):
+                project_id = path.split("/")[3]
+                if not db.get_project(project_id):
+                    raise ApiError(404, "Project not found")
+                fields, files = self.read_multipart()
+                pdf_bytes = require_pdf_upload(files.get("fabPdf") or files.get("polarityPdf"))
+                candidates = polarity.extract_fab_pdf_candidates(pdf_bytes)
+                project, summary = db.import_polarity_candidates(
+                    project_id,
+                    candidates=candidates,
+                    source=str(fields.get("source") or "fab_pdf"),
+                )
+                if not project:
+                    raise ApiError(404, "Project not found")
+                self.send_json(200, {"project": project, "summary": summary})
+                return
+
             if path.startswith("/api/projects/") and path.endswith("/import/prepared-xlsx"):
                 project_id = path.split("/")[3]
                 if not db.get_project(project_id):
@@ -394,6 +496,7 @@ class PlatformHandler(BaseHTTPRequestHandler):
                         project_id=project_id,
                         step_ids=list(payload.get("stepIds") or []),
                         note=str(payload.get("note") or ""),
+                        allow_mixed=bool(payload.get("allowMixed")),
                     )
                 except ValueError as error:
                     raise ApiError(400, str(error)) from error
@@ -670,6 +773,29 @@ class PlatformHandler(BaseHTTPRequestHandler):
                 self.send_json(200, {"project": project})
                 return
 
+            if path.startswith("/api/projects/") and "/polarity/" in path:
+                parts = path.split("/")
+                project_id = parts[3]
+                designator = unquote(parts[5])
+                if not db.get_project(project_id):
+                    raise ApiError(404, "Project not found")
+                payload = self.read_json()
+                try:
+                    project = db.update_component_polarity(
+                        project_id=project_id,
+                        designator=designator,
+                        required=bool(payload.get("required")),
+                        plus_x=parse_number(payload.get("plusX")),
+                        plus_y=parse_number(payload.get("plusY")),
+                        note=str(payload.get("note") or ""),
+                    )
+                except ValueError as error:
+                    raise ApiError(400, str(error)) from error
+                if not project:
+                    raise ApiError(404, "Project not found")
+                self.send_json(200, {"project": project})
+                return
+
             if path.startswith("/api/projects/") and "/steps/" in path:
                 parts = path.split("/")
                 project_id = parts[3]
@@ -703,6 +829,10 @@ class PlatformHandler(BaseHTTPRequestHandler):
                         "rotation": payload.get("rotation"),
                         "flipX": payload.get("flipX"),
                         "flipY": payload.get("flipY"),
+                        "offsetX": payload.get("offsetX"),
+                        "offsetY": payload.get("offsetY"),
+                        "scaleX": payload.get("scaleX"),
+                        "scaleY": payload.get("scaleY"),
                     },
                 )
                 if not project:

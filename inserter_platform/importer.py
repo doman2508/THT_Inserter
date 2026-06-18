@@ -57,10 +57,20 @@ def parse_float(value: object) -> float | None:
     return float(match.group(0))
 
 
-DESIGNATOR_TOKEN_RE = re.compile(r"^[A-Z]{1,5}\d+[A-Z']*$")
+# Standard designators are simple (R62, U3, J1), but some customer BOMs use
+# hierarchical names such as RP.A0.1. Keep the token strict enough to avoid notes.
+DESIGNATOR_TOKEN_RE = re.compile(r"^(?=[A-Z][A-Z0-9.']*$)(?=.*\d)[A-Z][A-Z0-9']*(?:\.[A-Z0-9']+)*$")
 
 
 def clean_designator_token(value: str) -> str:
+    value = str(value).translate(str.maketrans({
+        "·": ".",
+        "•": ".",
+        "․": ".",
+        "‧": ".",
+        "∙": ".",
+        "．": ".",
+    }))
     return value.strip().strip("()[]{}.,:").replace("’", "'").upper()
 
 
@@ -99,11 +109,9 @@ def split_designators(value: object) -> list[str]:
     return parsed_designators
 
 
-def natural_designator_key(value: str) -> tuple[str, int, str]:
-    match = re.match(r"^([A-Z]+)(\d+)(.*)$", value.upper())
-    if not match:
-        return (value.upper(), -1, "")
-    return (match.group(1), int(match.group(2)), match.group(3))
+def natural_designator_key(value: str) -> tuple[Any, ...]:
+    parts = re.split(r"(\d+)", value.upper())
+    return tuple(int(part) if part.isdigit() else part for part in parts if part != "")
 
 
 def read_xlsx_table(file_bytes: bytes, required_headers: dict[str, str]) -> list[dict[str, Any]]:
