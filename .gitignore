@@ -13,6 +13,7 @@ env/
 .DS_Store
 Thumbs.db
 data/
+_incoming_projects/
 *.db
 *.sqlite
 *_raport_operatora.csv
