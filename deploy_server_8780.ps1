@@ -29,7 +29,14 @@ function Stop-PortListener {
     try {
         $listeners = Get-NetTCPConnection -LocalPort $LocalPort -State Listen -ErrorAction SilentlyContinue
     } catch {
-        Write-Host "Get-NetTCPConnection is not available, skipping port lookup."
+        Write-Host "Get-NetTCPConnection is not available, using netstat fallback."
+        $netstatLines = netstat -ano -p tcp | Select-String -Pattern ":$LocalPort\s+.*LISTENING"
+        $listeners = foreach ($line in $netstatLines) {
+            $parts = ($line.Line -split "\s+") | Where-Object { $_ }
+            if ($parts.Count -ge 5) {
+                [PSCustomObject]@{ OwningProcess = [int]$parts[-1] }
+            }
+        }
     }
 
     $processIds = $listeners | Select-Object -ExpandProperty OwningProcess -Unique
@@ -114,6 +121,10 @@ $process = Start-Process `
     -PassThru
 
 Write-Host "Started PID: $($process.Id)"
+Start-Sleep -Seconds 1
+if ($process.HasExited) {
+    throw "Application process exited immediately. Check stderr log: $stderrLog"
+}
 Wait-HealthCheck -LocalPort $Port
 
 Write-Host "Network URL: $PublicUrl"

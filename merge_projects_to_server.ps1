@@ -19,6 +19,16 @@ function Invoke-Checked {
     }
 }
 
+function Invoke-RemotePowerShell {
+    param([string]$ScriptText)
+
+    $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($ScriptText))
+    Invoke-Checked "ssh" @(
+        $SshHost,
+        "powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand $encoded"
+    )
+}
+
 $localDb = Join-Path $LocalDataPath "inserter_platform.db"
 $localUploads = Join-Path $LocalDataPath "uploads"
 if (-not (Test-Path $localDb)) {
@@ -30,10 +40,7 @@ $repoPathRemote = $RepoPath.Replace("\", "/")
 $incomingRemote = "$repoPathRemote/_incoming_projects/$stamp"
 
 Write-Host "Creating remote incoming directory: $incomingRemote"
-Invoke-Checked "ssh" @(
-    $SshHost,
-    "powershell -NoProfile -Command `"New-Item -ItemType Directory -Force -Path '$incomingRemote' | Out-Null`""
-)
+Invoke-RemotePowerShell "New-Item -ItemType Directory -Force -Path '$incomingRemote'"
 
 Write-Host "Uploading local database snapshot..."
 Invoke-Checked "scp" @($localDb, "${SshHost}:$incomingRemote/inserter_platform.db")
@@ -73,7 +80,4 @@ if ($Apply) {
     $mode = "APPLY"
 }
 Write-Host "Running remote merge $mode..."
-Invoke-Checked "ssh" @(
-    $SshHost,
-    "powershell -NoProfile -ExecutionPolicy Bypass -Command `"$remoteCommand`""
-)
+Invoke-RemotePowerShell $remoteCommand
