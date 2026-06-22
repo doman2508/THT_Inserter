@@ -404,6 +404,11 @@ def split_designators(value: str) -> list[str]:
     return [item.upper() for item in re.split(r"[,\s;+]+", value or "") if item.strip()]
 
 
+def natural_designator_key(value: str) -> tuple[Any, ...]:
+    parts = re.split(r"(\d+)", str(value or "").upper())
+    return tuple(int(part) if part.isdigit() else part for part in parts if part != "")
+
+
 def normalize_line_key(value: str) -> str:
     return re.sub(r"\s+", " ", value or "").strip().upper()
 
@@ -1269,6 +1274,105 @@ def replace_project_import_data(
             (timestamp, project_id),
         )
     return get_project(project_id)
+
+
+def supplement_project_points(
+    project_id: str,
+    *,
+    points: list[dict[str, Any]],
+    summary: dict[str, Any],
+) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+    timestamp = now_iso()
+    with connect() as db:
+        if db.execute("SELECT 1 FROM projects WHERE id = ?", (project_id,)).fetchone() is None:
+            return None, {}
+
+        step_designators: set[str] = set()
+        for row in db.execute(
+            "SELECT designators FROM placement_steps WHERE project_id = ?",
+            (project_id,),
+        ).fetchall():
+            step_designators.update(split_designators(str(row["designators"] or "")))
+
+        existing_points = {
+            str(row["designator"] or "").strip().upper()
+            for row in db.execute(
+                "SELECT designator FROM component_points WHERE project_id = ?",
+                (project_id,),
+            ).fetchall()
+            if str(row["designator"] or "").strip()
+        }
+
+        pp_points: dict[str, dict[str, Any]] = {}
+        for point in points:
+            designator = str(point.get("designator") or "").strip().upper()
+            if designator and designator not in pp_points:
+                pp_points[designator] = point
+
+        missing_before = sorted(step_designators - existing_points, key=natural_designator_key)
+        added_designators = [
+            designator
+            for designator in missing_before
+            if designator in pp_points
+        ]
+        still_missing = [
+            designator
+            for designator in missing_before
+            if designator not in pp_points
+        ]
+
+        db.executemany(
+            """
+            INSERT INTO component_points (project_id, designator, x, y, rotation, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            [
+                (
+                    project_id,
+                    designator,
+                    float(pp_points[designator]["x"]),
+                    float(pp_points[designator]["y"]),
+                    pp_points[designator].get("rotation"),
+                    timestamp,
+                )
+                for designator in added_designators
+            ],
+        )
+
+        full_summary = {
+            **summary,
+            "stepDesignators": len(step_designators),
+            "existingPoints": len(existing_points),
+            "missingBefore": missing_before,
+            "addedPoints": len(added_designators),
+            "addedDesignators": added_designators,
+            "stillMissingInPp": still_missing,
+            "ignoredPpDesignators": sorted(
+                (set(pp_points) - step_designators),
+                key=natural_designator_key,
+            ),
+        }
+        db.execute(
+            """
+            INSERT INTO project_imports (project_id, source_type, summary_json, created_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (
+                project_id,
+                "pp-point-supplement",
+                json.dumps(full_summary, ensure_ascii=False),
+                timestamp,
+            ),
+        )
+        append_project_change(
+            db,
+            project_id,
+            "pp_point_supplement",
+            f"Uzupełniono punkty P&P: {len(added_designators)}.",
+            timestamp,
+        )
+        db.execute("UPDATE projects SET updated_at = ? WHERE id = ?", (timestamp, project_id))
+    return get_project(project_id), full_summary
 
 
 def create_step(

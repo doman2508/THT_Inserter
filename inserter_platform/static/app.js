@@ -39,6 +39,8 @@ const els = {
   previewImagesForm: document.getElementById("previewImagesForm"),
   reimportForm: document.getElementById("reimportForm"),
   reimportSummary: document.getElementById("reimportSummary"),
+  supplementPointsForm: document.getElementById("supplementPointsForm"),
+  supplementPointsSummary: document.getElementById("supplementPointsSummary"),
   pinIndexForm: document.getElementById("pinIndexForm"),
   pinIndexList: document.getElementById("pinIndexList"),
   stepForm: document.getElementById("stepForm"),
@@ -291,7 +293,7 @@ function showActionPanel(panelName) {
   if (!target) {
     return;
   }
-  if (["editProject", "boardImage", "previewImages", "reimportProject", "addLine"].includes(panelName) && !state.selectedProject) {
+  if (["editProject", "boardImage", "previewImages", "reimportProject", "supplementPoints", "addLine"].includes(panelName) && !state.selectedProject) {
     alert("Najpierw wybierz projekt.");
     return;
   }
@@ -735,6 +737,32 @@ function renderImportSummary(summary, project) {
   `;
 }
 
+function shortList(items, limit = 14) {
+  const values = Array.isArray(items) ? items.filter(Boolean) : [];
+  if (!values.length) {
+    return "-";
+  }
+  const suffix = values.length > limit ? ` ... +${values.length - limit}` : "";
+  return `${values.slice(0, limit).join(", ")}${suffix}`;
+}
+
+function renderPointSupplementSummary(summary) {
+  if (!els.supplementPointsSummary) {
+    return;
+  }
+  const added = summary?.addedDesignators || [];
+  const stillMissing = summary?.stillMissingInPp || [];
+  const ignored = summary?.ignoredPpDesignators || [];
+  const duplicates = summary?.ppDuplicateDesignators || [];
+  els.supplementPointsSummary.innerHTML = `
+    Dodano <strong>${summary?.addedPoints || 0}</strong> punkt\u00f3w z P&amp;P.
+    ${added.length ? `<br>Dopi\u0119te: ${escapeHtml(shortList(added))}` : ""}
+    ${stillMissing.length ? `<br>Nadal bez punktu w P&amp;P: ${escapeHtml(shortList(stillMissing))}` : ""}
+    ${duplicates.length ? `<br>Duplikaty w P&amp;P pomini\u0119te: ${escapeHtml(shortList(duplicates))}` : ""}
+    ${ignored.length ? `<br>Zignorowano spoza linii monta\u017cowych: ${ignored.length}` : ""}
+  `;
+}
+
 function renderProjectDetails() {
   const project = state.selectedProject;
   if (!project) {
@@ -757,6 +785,7 @@ function renderProjectDetails() {
         <button type="button" data-panel="editProject">Edytuj</button>
         <button type="button" data-panel="boardImage">${project.board_image_path ? "Podmień PCB" : "Dodaj PCB"}</button>
         <button type="button" data-panel="reimportProject">Reimport</button>
+        <button type="button" data-panel="supplementPoints">Uzupe\u0142nij P&amp;P</button>
         <button type="button" class="primary" data-export-project-html="${project.id}" ${project.board_image_path ? "" : "disabled"}>Generuj HTML</button>
       </div>
       ${renderBoardThumb(project)}
@@ -944,15 +973,13 @@ function projectReadiness(project) {
   const latestImport = project.imports?.[0]?.summary || null;
   const steps = project.steps || [];
   const points = project.points || [];
-  const missingInPp = latestImport?.missingInPp || [];
   const extraInPp = latestImport?.extraInPp || [];
   const bomDuplicateDesignators = latestImport?.bomDuplicateDesignators || [];
   const bomConflictingDesignators = latestImport?.bomConflictingDesignators || [];
   const ppDuplicateDesignators = latestImport?.ppDuplicateDesignators || [];
   const preparationCandidates = steps.filter(isPreparationCandidate);
   const duplicateCount = bomDuplicateDesignators.length + bomConflictingDesignators.length + ppDuplicateDesignators.length;
-  const unresolvedMissingPoints = unresolvedMissingPointSteps(project);
-  const missingImportedAsSteps = Boolean(latestImport?.missingInPpImportedAsSteps);
+  const missingPointDesignatorList = missingPointDesignators(project);
   const checks = [
     {
       label: "BOM i P&P zaimportowane",
@@ -971,16 +998,12 @@ function projectReadiness(project) {
     },
     {
       label: "Wyjątki bez punktu P&P rozliczone",
-      ok: latestImport && (missingImportedAsSteps ? unresolvedMissingPoints.length === 0 : missingInPp.length === 0),
+      ok: Boolean(latestImport) && missingPointDesignatorList.length === 0,
       detail: !latestImport
         ? "brak danych importu"
-        : !missingImportedAsSteps && missingInPp.length
-          ? `wymagany reimport, braki: ${readinessShortList(missingInPp)}`
-          : unresolvedMissingPoints.length
-        ? `do decyzji: ${readinessShortList(unresolvedMissingPoints.flatMap((step) => splitDesignators(step.designators)))}`
-        : missingInPp.length
-          ? "braki P&P opisane, pominięte albo usunięte"
-          : "brak otwartych wyjątków bez punktu",
+        : missingPointDesignatorList.length
+          ? `bez punktu: ${readinessShortList(missingPointDesignatorList)}`
+          : "wszystkie aktywne linie maj\u0105 punkty P&P",
     },
     {
       label: "BOM/P&P bez duplikatów",
@@ -1107,7 +1130,7 @@ function renderProjectChangeHistory(project) {
 
 function renderSummaryTab(project) {
   const latestImport = project.imports?.[0]?.summary;
-  const missing = unresolvedMissingPointSteps(project).length;
+  const missing = missingPointDesignators(project).length;
   const extra = latestImport?.extraInPp?.length || 0;
   return `
     <div class="stat-grid">
@@ -1138,6 +1161,7 @@ function renderSummaryTab(project) {
       <button type="button" data-panel="editProject">Edytuj projekt</button>
       <button type="button" data-panel="boardImage">${project.board_image_path ? "Podmień obraz PCB" : "Dodaj obraz PCB"}</button>
       <button type="button" data-panel="reimportProject">Reimport Exceli</button>
+      <button type="button" data-panel="supplementPoints">Uzupe\u0142nij punkty P&amp;P</button>
       <button type="button" class="primary" data-export-project-html="${project.id}" ${project.board_image_path ? "" : "disabled"}>Generuj HTML</button>
     </div>
   `;
@@ -1155,6 +1179,20 @@ function sortDesignators(items) {
     numeric: true,
     sensitivity: "base",
   }));
+}
+
+function missingPointDesignators(project) {
+  const pointDesignators = new Set((project.points || []).map((point) => String(point.designator || "").toUpperCase()));
+  const missing = new Set();
+  (project.steps || []).filter((step) => !stepIsSkipped(step)).forEach((step) => {
+    stepDesignatorsForPoints(step).forEach((designator) => {
+      const cleanDesignator = String(designator || "").toUpperCase();
+      if (cleanDesignator && !pointDesignators.has(cleanDesignator)) {
+        missing.add(cleanDesignator);
+      }
+    });
+  });
+  return sortDesignators(Array.from(missing));
 }
 
 function extractPinCount(value, fallback = 1) {
@@ -2350,6 +2388,14 @@ function attachAdminPreviewTools() {
 }
 
 function renderPointsTab(project) {
+  const missing = missingPointDesignators(project);
+  const missingPanel = missing.length ? `
+    <div class="summary-box">
+      <strong>Linie bez punktu P&amp;P</strong>
+      <span>${escapeHtml(shortList(missing, 30))}</span>
+      <span>Wgraj aktualny P&amp;P przez akcj\u0119 "Uzupe\u0142nij punkty P&amp;P", aby dopi\u0105\u0107 brakuj\u0105ce markery bez ruszania linii monta\u017cowych.</span>
+    </div>
+  ` : "";
   const rows = (project.points || [])
     .map((point) => `
       <tr>
@@ -2362,6 +2408,7 @@ function renderPointsTab(project) {
     .join("");
 
   return `
+    ${missingPanel}
     <div class="table-wrap">
       <table class="admin-table points-table">
         <thead>
@@ -4395,6 +4442,36 @@ els.reimportForm.addEventListener("submit", async (event) => {
     await selectProject(response.project.id, "lines");
   } catch (error) {
     els.reimportSummary.textContent = error.message;
+  }
+});
+
+els.supplementPointsForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!state.selectedProject) {
+    alert("Najpierw wybierz projekt.");
+    return;
+  }
+  if (els.supplementPointsSummary) {
+    els.supplementPointsSummary.textContent = "Uzupe\u0142niam punkty z P&P...";
+  }
+  try {
+    const response = await apiForm(
+      `/api/projects/${state.selectedProject.id}/points/import-pp`,
+      new FormData(els.supplementPointsForm),
+    );
+    els.supplementPointsForm.reset();
+    renderPointSupplementSummary(response.summary);
+    state.activeProjectTab = "preview";
+    state.selectedProject = response.project;
+    await loadProjects();
+    renderProjectDetails();
+    renderOperatorSteps();
+  } catch (error) {
+    if (els.supplementPointsSummary) {
+      els.supplementPointsSummary.textContent = error.message;
+    } else {
+      alert(error.message);
+    }
   }
 });
 

@@ -295,6 +295,24 @@
                             <div id="reimportSummary" class="muted">Istniejące linie i punkty zostaną zastąpione nowym importem.</div>
                         </div>
                     </form>
+
+                    <form id="supplementPointsForm" class="panel action-panel" data-action-panel="supplementPoints" hidden>
+                        <div class="panel-head">
+                            <div>
+                                <h2>Uzupe&#322;nij punkty P&amp;P</h2>
+                                <p>Dopisuje brakuj&#261;ce wsp&#243;&#322;rz&#281;dne do istniej&#261;cych linii bez zmiany kolejno&#347;ci i opis&#243;w.</p>
+                            </div>
+                            <button type="button" data-close-panel>Ukryj</button>
+                        </div>
+                        <label>
+                            P&amp;P XLSX
+                            <input name="ppFile" type="file" accept=".xlsx" required>
+                        </label>
+                        <div class="form-row">
+                            <button type="submit" class="primary">Uzupe&#322;nij punkty</button>
+                            <div id="supplementPointsSummary" class="muted">Istniej&#261;ce punkty zostan&#261; bez zmian, dodane b&#281;d&#261; tylko brakuj&#261;ce.</div>
+                        </div>
+                    </form>
                 </div>
 
                 <section id="projectDetails" class="panel project-details" hidden>

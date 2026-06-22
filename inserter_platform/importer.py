@@ -60,6 +60,7 @@ def parse_float(value: object) -> float | None:
 # Standard designators are simple (R62, U3, J1), but some customer BOMs use
 # hierarchical names such as RP.A0.1. Keep the token strict enough to avoid notes.
 DESIGNATOR_TOKEN_RE = re.compile(r"^(?=[A-Z][A-Z0-9.']*$)(?=.*\d)[A-Z][A-Z0-9']*(?:\.[A-Z0-9']+)*$")
+PLACEMENT_TOKEN_RE = re.compile(r"^[A-Z][A-Z0-9']*(?:\.[A-Z0-9']+)*$")
 
 
 def clean_designator_token(value: str) -> str:
@@ -107,6 +108,18 @@ def parse_designator_cell(value: object) -> tuple[list[str], str]:
 def split_designators(value: object) -> list[str]:
     parsed_designators, _ = parse_designator_cell(value)
     return parsed_designators
+
+
+def split_placement_designators(value: object) -> list[str]:
+    raw_text = cell_text(value)
+    if not raw_text:
+        return []
+    designators: list[str] = []
+    for token in re.split(r"[,;\s+/]+", raw_text):
+        clean_token = clean_designator_token(token)
+        if clean_token and PLACEMENT_TOKEN_RE.match(clean_token):
+            designators.append(clean_token)
+    return designators
 
 
 def natural_designator_key(value: str) -> tuple[Any, ...]:
@@ -197,7 +210,7 @@ def parse_placement(file_bytes: bytes) -> tuple[list[PlacementPoint], dict[str, 
     invalid_rows: list[int] = []
 
     for row in rows:
-        designators = split_designators(row["designator"])
+        designators = split_placement_designators(row["designator"])
         x = parse_float(row["x"])
         y = parse_float(row["y"])
         rotation = parse_float(row["rotation"])
@@ -221,6 +234,36 @@ def parse_placement(file_bytes: bytes) -> tuple[list[PlacementPoint], dict[str, 
     }
 
 
+def points_from_placement(pp_points: list[PlacementPoint]) -> tuple[list[dict[str, Any]], list[str]]:
+    pp_by_designator: OrderedDict[str, PlacementPoint] = OrderedDict()
+    pp_duplicates: list[str] = []
+    for point in pp_points:
+        if point.designator in pp_by_designator:
+            pp_duplicates.append(point.designator)
+            continue
+        pp_by_designator[point.designator] = point
+    return [
+        {
+            "designator": point.designator,
+            "x": point.x,
+            "y": point.y,
+            "rotation": point.rotation,
+        }
+        for point in pp_by_designator.values()
+    ], pp_duplicates
+
+
+def prepare_point_supplement(*, pp_bytes: bytes) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    pp_points, pp_summary = parse_placement(pp_bytes)
+    points, duplicates = points_from_placement(pp_points)
+    return points, {
+        "sourceType": "pp-point-supplement",
+        **pp_summary,
+        "uniquePpPoints": len(points),
+        "ppDuplicateDesignators": sorted(set(duplicates), key=natural_designator_key),
+    }
+
+
 def build_steps_and_points(bom_items: list[BomItem], pp_points: list[PlacementPoint]) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
     bom_by_designator: OrderedDict[str, BomItem] = OrderedDict()
     bom_duplicates: list[str] = []
@@ -235,13 +278,17 @@ def build_steps_and_points(bom_items: list[BomItem], pp_points: list[PlacementPo
             continue
         bom_by_designator[item.designator] = item
 
-    pp_by_designator: dict[str, PlacementPoint] = {}
-    pp_duplicates: list[str] = []
-    for point in pp_points:
-        if point.designator in pp_by_designator:
-            pp_duplicates.append(point.designator)
-            continue
-        pp_by_designator[point.designator] = point
+    pp_points_dicts, pp_duplicates = points_from_placement(pp_points)
+    pp_by_designator = {
+        point["designator"]: PlacementPoint(
+            designator=point["designator"],
+            x=float(point["x"]),
+            y=float(point["y"]),
+            rotation=point.get("rotation"),
+            source_row=0,
+        )
+        for point in pp_points_dicts
+    }
 
     missing_in_pp = [designator for designator in bom_by_designator if designator not in pp_by_designator]
     extra_in_pp = [designator for designator in pp_by_designator if designator not in bom_by_designator]

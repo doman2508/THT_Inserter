@@ -476,6 +476,30 @@ class PlatformHandler(BaseHTTPRequestHandler):
                 self.send_json(200, {"project": project, "summary": summary})
                 return
 
+            if path.startswith("/api/projects/") and path.endswith("/points/import-pp"):
+                project_id = path.split("/")[3]
+                if not db.get_project(project_id):
+                    raise ApiError(404, "Project not found")
+                fields, files = self.read_multipart()
+                pp_file = files.get("ppFile")
+                if not pp_file or not pp_file.get("content"):
+                    raise ApiError(400, "P&P XLSX file is required")
+                try:
+                    points, summary = importer.prepare_point_supplement(
+                        pp_bytes=bytes(pp_file["content"]),
+                    )
+                except ValueError as error:
+                    raise ApiError(400, str(error)) from error
+                project, full_summary = db.supplement_project_points(
+                    project_id,
+                    points=points,
+                    summary=summary,
+                )
+                if not project:
+                    raise ApiError(404, "Project not found")
+                self.send_json(200, {"project": project, "summary": full_summary})
+                return
+
             if path.startswith("/api/projects/") and path.endswith("/consolidate-pin-steps"):
                 project_id = path.split("/")[3]
                 project = db.consolidate_pin_steps(project_id)
