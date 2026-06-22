@@ -4,6 +4,7 @@ param(
     [int]$Port = 8780,
     [string]$BindHost = "0.0.0.0",
     [string]$PublicUrl = "http://192.168.1.10:8780",
+    [string]$TaskName = "MSX THT Inserter 8780",
     [switch]$SkipGitPull,
     [switch]$InstallRequirements
 )
@@ -67,6 +68,36 @@ function Wait-HealthCheck {
     throw "Application did not respond on $uri"
 }
 
+function Start-PlatformTask {
+    param(
+        [string]$LocalRepoPath,
+        [int]$LocalPort,
+        [string]$LocalBindHost,
+        [string]$LocalPublicUrl,
+        [string]$LocalTaskName
+    )
+
+    $runner = Join-Path $LocalRepoPath "run_platform_8780.ps1"
+    if (-not (Test-Path $runner)) {
+        throw "Runner script not found: $runner"
+    }
+
+    $taskCommand = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$runner`" -RepoPath `"$LocalRepoPath`" -Port $LocalPort -BindHost `"$LocalBindHost`" -PublicUrl `"$LocalPublicUrl`""
+    Invoke-Checked "schtasks.exe" @(
+        "/Create",
+        "/TN",
+        $LocalTaskName,
+        "/TR",
+        $taskCommand,
+        "/SC",
+        "ONCE",
+        "/ST",
+        "23:59",
+        "/F"
+    )
+    Invoke-Checked "schtasks.exe" @("/Run", "/TN", $LocalTaskName)
+}
+
 Set-Location $RepoPath
 
 if (-not (Test-Path ".git")) {
@@ -101,31 +132,15 @@ if ($InstallRequirements) {
 Stop-PortListener -LocalPort $Port
 Start-Sleep -Seconds 1
 
-$logsDir = Join-Path $RepoPath "logs"
-New-Item -ItemType Directory -Force -Path $logsDir | Out-Null
-$stdoutLog = Join-Path $logsDir "inserter_platform_${Port}.out.log"
-$stderrLog = Join-Path $logsDir "inserter_platform_${Port}.err.log"
+Write-Host "Starting MSX THT Inserter task on ${BindHost}:${Port}"
+Start-PlatformTask `
+    -LocalRepoPath $RepoPath `
+    -LocalPort $Port `
+    -LocalBindHost $BindHost `
+    -LocalPublicUrl $PublicUrl `
+    -LocalTaskName $TaskName
 
-$env:INSERTER_PLATFORM_HOST = $BindHost
-$env:INSERTER_PLATFORM_PORT = [string]$Port
-$env:INSERTER_PLATFORM_PUBLIC_URL = $PublicUrl
-
-Write-Host "Starting MSX THT Inserter on ${BindHost}:${Port}"
-$process = Start-Process `
-    -FilePath $python `
-    -ArgumentList @("-m", "inserter_platform.server") `
-    -WorkingDirectory $RepoPath `
-    -WindowStyle Hidden `
-    -RedirectStandardOutput $stdoutLog `
-    -RedirectStandardError $stderrLog `
-    -PassThru
-
-Write-Host "Started PID: $($process.Id)"
-Start-Sleep -Seconds 1
-if ($process.HasExited) {
-    throw "Application process exited immediately. Check stderr log: $stderrLog"
-}
 Wait-HealthCheck -LocalPort $Port
 
 Write-Host "Network URL: $PublicUrl"
-Write-Host "Logs: $stdoutLog"
+Write-Host "Logs: $(Join-Path $RepoPath "logs\inserter_platform_${Port}.task.log")"
