@@ -93,7 +93,7 @@
 
         #topbar {
             display: grid;
-            grid-template-columns: minmax(170px, 0.32fr) minmax(0, 1fr) auto;
+            grid-template-columns: minmax(230px, 0.3fr) minmax(0, 1fr) auto;
             gap: 6px;
             align-items: center;
             padding: 6px 9px;
@@ -102,6 +102,8 @@
         }
 
         .project-title {
+            display: grid;
+            gap: 2px;
             min-width: 0;
         }
 
@@ -122,9 +124,8 @@
 
         .progress-wrap {
             display: grid;
-            flex: 0 0 185px;
             gap: 3px;
-            min-width: 135px;
+            min-width: 0;
         }
 
         .progress-line {
@@ -246,6 +247,7 @@
             flex-wrap: nowrap;
             gap: 5px;
             align-items: center;
+            justify-content: flex-start;
             min-width: 0;
             overflow: visible;
             white-space: nowrap;
@@ -733,9 +735,6 @@
             <div class="project-title">
                 <strong id="projectName">{{ project_name }}</strong>
                 <span>MSX THT Inserter - stanowisko operatora</span>
-            </div>
-
-            <div class="view-controls">
                 <div class="progress-wrap">
                     <div class="progress-meta">
                         <span id="progressText">0 / 0</span>
@@ -745,6 +744,9 @@
                         <div id="progressFill"></div>
                     </div>
                 </div>
+            </div>
+
+            <div class="view-controls">
                 <label for="zoomRange">
                     Rozmiar
                     <input type="range" id="zoomRange" min="35" max="220" value="100">

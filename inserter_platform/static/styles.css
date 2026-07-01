@@ -1596,7 +1596,7 @@ body.operator-workspace-active .operator-work-panel {
     top: 0;
     z-index: 5;
     display: grid;
-    grid-template-columns: minmax(180px, 0.36fr) minmax(0, 1fr);
+    grid-template-columns: minmax(220px, 0.3fr) minmax(0, 1fr);
     gap: 6px 8px;
     align-items: center;
     justify-content: space-between;
@@ -1621,6 +1621,8 @@ body.operator-workspace-active .operator-work-panel {
 .operator-session-strip {
     display: grid;
     grid-template-columns: auto minmax(90px, 1fr);
+    grid-template-rows: auto auto;
+    gap: 2px 7px;
     min-width: 0;
     color: var(--muted);
     font-size: 11px;
@@ -1637,9 +1639,9 @@ body.operator-workspace-active .operator-work-panel {
 
 .operator-progress-mini {
     display: grid;
-    flex: 0 0 190px;
+    grid-column: 2;
     gap: 3px;
-    min-width: 135px;
+    min-width: 0;
 }
 
 .operator-progress-mini span {
@@ -1663,7 +1665,7 @@ body.operator-workspace-active .operator-work-panel {
 
 .operator-view-controls {
     flex-wrap: nowrap;
-    justify-content: flex-end;
+    justify-content: flex-start;
     min-width: 0;
     overflow: visible;
     white-space: nowrap;

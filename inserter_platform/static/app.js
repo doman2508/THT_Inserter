@@ -3696,12 +3696,12 @@ function renderOperatorCommandBar(project, currentStep, progress) {
       <div class="operator-session-strip">
         <button type="button" data-operator-back>Projekty</button>
         <strong>${escapeHtml(project.name)}</strong>
-      </div>
-      <div class="operator-view-controls">
         <div class="operator-progress-mini">
           <span>${progress.handled} / ${progress.total} (${progress.percent}%) | OK: ${progress.done} | Problem: ${progress.problems}</span>
           <div><i style="width: ${progress.percent}%"></i></div>
         </div>
+      </div>
+      <div class="operator-view-controls">
         <label class="operator-zoom-control">
           <span>Rozmiar</span>
           <input type="range" min="35" max="240" step="5" value="${view.zoom}" data-operator-zoom>
