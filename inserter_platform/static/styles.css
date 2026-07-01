@@ -1596,7 +1596,7 @@ body.operator-workspace-active .operator-work-panel {
     top: 0;
     z-index: 5;
     display: grid;
-    grid-template-columns: minmax(220px, 0.78fr) minmax(0, 1fr);
+    grid-template-columns: minmax(180px, 0.36fr) minmax(0, 1fr);
     gap: 6px 8px;
     align-items: center;
     justify-content: space-between;
@@ -1620,7 +1620,7 @@ body.operator-workspace-active .operator-work-panel {
 
 .operator-session-strip {
     display: grid;
-    grid-template-columns: auto minmax(90px, 0.55fr) minmax(120px, 170px);
+    grid-template-columns: auto minmax(90px, 1fr);
     min-width: 0;
     color: var(--muted);
     font-size: 11px;
@@ -1637,8 +1637,9 @@ body.operator-workspace-active .operator-work-panel {
 
 .operator-progress-mini {
     display: grid;
+    flex: 0 0 190px;
     gap: 3px;
-    min-width: 0;
+    min-width: 135px;
 }
 
 .operator-progress-mini span {
@@ -1664,15 +1665,14 @@ body.operator-workspace-active .operator-work-panel {
     flex-wrap: nowrap;
     justify-content: flex-end;
     min-width: 0;
-    overflow-x: auto;
+    overflow: visible;
     white-space: nowrap;
-    scrollbar-width: thin;
 }
 
 .operator-view-controls button,
 .operator-segment button {
     min-height: 30px;
-    padding: 5px 8px;
+    padding: 5px 7px;
     font-weight: 700;
 }
 
@@ -1691,15 +1691,54 @@ body.operator-workspace-active .operator-work-panel {
 }
 
 .operator-zoom-control input {
-    width: 108px;
+    width: 84px;
 }
 
 .operator-marker-size-control input {
-    width: 76px;
+    width: 58px;
 }
 
 .operator-marker-size-control strong {
-    min-width: 38px;
+    min-width: 34px;
+}
+
+.operator-more {
+    position: relative;
+    display: grid;
+    place-items: center;
+}
+
+.operator-more-trigger {
+    min-width: 34px;
+    padding-inline: 8px !important;
+    font-weight: 800;
+    letter-spacing: 1px;
+}
+
+.operator-more-menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 25;
+    display: none;
+    min-width: 150px;
+    padding: 6px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: #fff;
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.16);
+}
+
+.operator-more:hover .operator-more-menu,
+.operator-more:focus-within .operator-more-menu {
+    display: grid;
+    gap: 5px;
+}
+
+.operator-more-menu button {
+    width: 100%;
+    justify-content: flex-start;
+    text-align: left;
 }
 
 .marker-choice {

@@ -93,10 +93,10 @@
 
         #topbar {
             display: grid;
-            grid-template-columns: minmax(145px, 0.65fr) minmax(135px, 190px) minmax(0, 1fr) auto;
-            gap: 8px;
+            grid-template-columns: minmax(170px, 0.32fr) minmax(0, 1fr) auto;
+            gap: 6px;
             align-items: center;
-            padding: 7px 10px;
+            padding: 6px 9px;
             border-bottom: 1px solid var(--line);
             background: var(--panel);
         }
@@ -122,11 +122,13 @@
 
         .progress-wrap {
             display: grid;
-            gap: 4px;
+            flex: 0 0 185px;
+            gap: 3px;
+            min-width: 135px;
         }
 
         .progress-line {
-            height: 7px;
+            height: 6px;
             overflow: hidden;
             border-radius: 999px;
             background: var(--panel-strong);
@@ -140,11 +142,43 @@
         }
 
         .top-actions {
-            display: flex;
-            flex-wrap: nowrap;
-            gap: 6px;
-            justify-content: flex-end;
+            position: relative;
+            display: grid;
+            place-items: center;
             white-space: nowrap;
+        }
+
+        .more-trigger {
+            min-width: 34px;
+            padding-inline: 8px;
+            font-weight: 800;
+            letter-spacing: 1px;
+        }
+
+        .more-menu {
+            position: absolute;
+            top: calc(100% + 6px);
+            right: 0;
+            z-index: 30;
+            display: none;
+            min-width: 160px;
+            padding: 6px;
+            border: 1px solid var(--line);
+            border-radius: 7px;
+            background: #ffffff;
+            box-shadow: var(--shadow);
+        }
+
+        .top-actions:hover .more-menu,
+        .top-actions:focus-within .more-menu {
+            display: grid;
+            gap: 5px;
+        }
+
+        .more-menu button {
+            width: 100%;
+            justify-content: flex-start;
+            text-align: left;
         }
 
         .preview-buttons {
@@ -210,12 +244,11 @@
         .view-controls {
             display: flex;
             flex-wrap: nowrap;
-            gap: 6px;
+            gap: 5px;
             align-items: center;
             min-width: 0;
-            overflow-x: auto;
+            overflow: visible;
             white-space: nowrap;
-            scrollbar-width: thin;
         }
 
         .view-controls label {
@@ -227,11 +260,11 @@
         }
 
         #zoomRange {
-            width: 116px;
+            width: 84px;
         }
 
         #markerSizeRange {
-            width: 76px;
+            width: 58px;
         }
 
         .rotation-group {
@@ -256,12 +289,12 @@
         .rotation-group button,
         .marker-group button {
             min-height: 30px;
-            padding: 4px 7px;
+            padding: 4px 6px;
         }
 
         #topbar button {
             min-height: 32px;
-            padding: 5px 9px;
+            padding: 5px 8px;
         }
 
         #workPanel {
@@ -702,17 +735,16 @@
                 <span>MSX THT Inserter - stanowisko operatora</span>
             </div>
 
-            <div class="progress-wrap">
-                <div class="progress-meta">
-                    <span id="progressText">0 / 0</span>
-                    <span id="timerText"></span>
-                </div>
-                <div class="progress-line" aria-hidden="true">
-                    <div id="progressFill"></div>
-                </div>
-            </div>
-
             <div class="view-controls">
+                <div class="progress-wrap">
+                    <div class="progress-meta">
+                        <span id="progressText">0 / 0</span>
+                        <span id="timerText"></span>
+                    </div>
+                    <div class="progress-line" aria-hidden="true">
+                        <div id="progressFill"></div>
+                    </div>
+                </div>
                 <label for="zoomRange">
                     Rozmiar
                     <input type="range" id="zoomRange" min="35" max="220" value="100">
@@ -744,10 +776,13 @@
             </div>
 
             <div class="top-actions">
-                <button type="button" id="focusBtn">Focus</button>
-                <button type="button" id="fullscreenBtn">Pełny ekran</button>
-                <button type="button" id="exportBtn">Raport</button>
-                <button type="button" id="resetBtn" class="ghost">Reset</button>
+                <button type="button" class="more-trigger" aria-label="Wiecej opcji">...</button>
+                <div class="more-menu">
+                    <button type="button" id="focusBtn">Focus</button>
+                    <button type="button" id="fullscreenBtn">Pełny ekran</button>
+                    <button type="button" id="exportBtn">Raport</button>
+                    <button type="button" id="resetBtn" class="ghost">Reset</button>
+                </div>
             </div>
         </header>
 

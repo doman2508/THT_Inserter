@@ -3696,12 +3696,12 @@ function renderOperatorCommandBar(project, currentStep, progress) {
       <div class="operator-session-strip">
         <button type="button" data-operator-back>Projekty</button>
         <strong>${escapeHtml(project.name)}</strong>
+      </div>
+      <div class="operator-view-controls">
         <div class="operator-progress-mini">
           <span>${progress.handled} / ${progress.total} (${progress.percent}%) | OK: ${progress.done} | Problem: ${progress.problems}</span>
           <div><i style="width: ${progress.percent}%"></i></div>
         </div>
-      </div>
-      <div class="operator-view-controls">
         <label class="operator-zoom-control">
           <span>Rozmiar</span>
           <input type="range" min="35" max="240" step="5" value="${view.zoom}" data-operator-zoom>
@@ -3726,14 +3726,19 @@ function renderOperatorCommandBar(project, currentStep, progress) {
             </button>
           `).join("")}
         </div>
-        <button type="button" class="${view.focusMode ? "active" : ""}" data-operator-focus>Focus</button>
         <button type="button" class="${view.showLabels ? "active" : ""}" data-operator-toggle-labels>Opisy: ${view.showLabels ? "ON" : "OFF"}</button>
         <button type="button" class="${view.showPolarity ? "active" : ""}" data-operator-toggle-polarity>Polaryzacja: ${view.showPolarity ? "ON" : "OFF"}</button>
         <button type="button" class="${view.showContours ? "active" : ""}" data-operator-toggle-contours>Kontur: ${view.showContours ? "ON" : "OFF"}</button>
         ${previewImages.map((image) => `
           <button type="button" data-operator-preview-image="${image.key}">${escapeHtml(image.label)}</button>
         `).join("")}
-        <button type="button" data-operator-fullscreen>Full screen</button>
+        <div class="operator-more">
+          <button type="button" class="operator-more-trigger" aria-label="Wi\u0119cej opcji">...</button>
+          <div class="operator-more-menu">
+            <button type="button" class="${view.focusMode ? "active" : ""}" data-operator-focus>Focus</button>
+            <button type="button" data-operator-fullscreen>Pe\u0142ny ekran</button>
+          </div>
+        </div>
       </div>
     </div>
   `;
