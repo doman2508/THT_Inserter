@@ -977,8 +977,9 @@ function projectReadiness(project) {
   const bomDuplicateDesignators = latestImport?.bomDuplicateDesignators || [];
   const bomConflictingDesignators = latestImport?.bomConflictingDesignators || [];
   const ppDuplicateDesignators = latestImport?.ppDuplicateDesignators || [];
+  const blockingPpDuplicates = blockingPpDuplicateDesignators(project, latestImport);
   const preparationCandidates = steps.filter(isPreparationCandidate);
-  const duplicateCount = bomDuplicateDesignators.length + bomConflictingDesignators.length + ppDuplicateDesignators.length;
+  const duplicateCount = bomDuplicateDesignators.length + bomConflictingDesignators.length + blockingPpDuplicates.length;
   const missingPointDesignatorList = missingPointDesignators(project);
   const checks = [
     {
@@ -1009,7 +1010,12 @@ function projectReadiness(project) {
       label: "BOM/P&P bez duplikatów",
       ok: Boolean(latestImport) && duplicateCount === 0,
       detail: latestImport
-        ? readinessDuplicateDetail(bomDuplicateDesignators, bomConflictingDesignators, ppDuplicateDesignators)
+        ? readinessDuplicateDetail(
+          bomDuplicateDesignators,
+          bomConflictingDesignators,
+          blockingPpDuplicates,
+          ppDuplicateDesignators.length - blockingPpDuplicates.length,
+        )
         : "brak danych importu",
     },
     {
@@ -1051,7 +1057,22 @@ function readinessShortList(items, limit = 5) {
   return `${shown}${rest}`;
 }
 
-function readinessDuplicateDetail(bomDuplicates, bomConflicts, ppDuplicates) {
+function blockingPpDuplicateDesignators(project, latestImport = project.imports?.[0]?.summary || null) {
+  const projectDesignators = new Set();
+  (project.steps || []).forEach((step) => {
+    stepDesignatorsForPoints(step).forEach((designator) => {
+      const cleanDesignator = String(designator || "").trim().toUpperCase();
+      if (cleanDesignator) {
+        projectDesignators.add(cleanDesignator);
+      }
+    });
+  });
+  return sortDesignators(Array.from(new Set((latestImport?.ppDuplicateDesignators || [])
+    .map((designator) => String(designator || "").trim().toUpperCase())
+    .filter((designator) => projectDesignators.has(designator)))));
+}
+
+function readinessDuplicateDetail(bomDuplicates, bomConflicts, ppDuplicates, ignoredPpDuplicateCount = 0) {
   const parts = [];
   if (bomDuplicates.length) {
     parts.push(`duplikaty BOM: ${readinessShortList(bomDuplicates)}`);
@@ -1061,6 +1082,9 @@ function readinessDuplicateDetail(bomDuplicates, bomConflicts, ppDuplicates) {
   }
   if (ppDuplicates.length) {
     parts.push(`duplikaty P&P: ${readinessShortList(ppDuplicates)}`);
+  }
+  if (ignoredPpDuplicateCount > 0) {
+    parts.push(`duplikaty P&P poza THT zignorowane: ${ignoredPpDuplicateCount}`);
   }
   return parts.length ? parts.join(" | ") : "brak duplikatów/konfliktów";
 }
@@ -1132,6 +1156,9 @@ function renderSummaryTab(project) {
   const latestImport = project.imports?.[0]?.summary;
   const missing = missingPointDesignators(project).length;
   const extra = latestImport?.extraInPp?.length || 0;
+  const ppDuplicateCount = latestImport?.ppDuplicateDesignators?.length || 0;
+  const blockingPpDuplicateCount = blockingPpDuplicateDesignators(project, latestImport).length;
+  const ignoredPpDuplicateCount = Math.max(0, ppDuplicateCount - blockingPpDuplicateCount);
   return `
     <div class="stat-grid">
       <div><strong>${project.steps?.length || 0}</strong><span>linie montażowe</span></div>
@@ -1153,7 +1180,7 @@ function renderSummaryTab(project) {
         <strong>Walidacja importu</strong>
         <span>Nadmiarowe punkty P&amp;P: ${extra}</span>
         <span>Duplikaty BOM: ${latestImport?.bomDuplicateDesignators?.length || 0}</span>
-        <span>Duplikaty P&amp;P: ${latestImport?.ppDuplicateDesignators?.length || 0}</span>
+        <span>Duplikaty P&amp;P blokujace THT: ${blockingPpDuplicateCount}${ignoredPpDuplicateCount ? ` | poza THT: ${ignoredPpDuplicateCount}` : ""}</span>
       </div>
     </div>
     ${renderProjectChangeHistory(project)}
