@@ -418,6 +418,20 @@
             font-size: 13px;
         }
 
+        .origin-notice {
+            padding: 8px 10px;
+            border: 1px solid #e2bd65;
+            border-radius: 6px;
+            background: #fff7e6;
+            color: #694300;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .origin-notice[hidden] {
+            display: none;
+        }
+
         #currentDesignators {
             min-height: 40px;
             max-height: 58px;
@@ -440,6 +454,34 @@
             border-radius: 6px;
             padding: 8px;
             color: var(--ink);
+        }
+
+        .step-controls {
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            background: #fafbfd;
+        }
+
+        .step-controls summary {
+            padding: 9px 10px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .step-controls summary:focus-visible {
+            outline: 2px solid var(--blue);
+            outline-offset: -2px;
+        }
+
+        .step-controls-content {
+            display: grid;
+            gap: 8px;
+            padding: 0 8px 8px;
+        }
+
+        .step-controls:not([open]) .step-controls-content {
+            display: none;
         }
 
         .step-actions {
@@ -827,22 +869,28 @@
                     </div>
 
                     <div id="polarityNotice" class="polarity-notice" hidden></div>
+                    <div id="originNotice" class="origin-notice" hidden></div>
 
-                    <label class="designators-box" for="operatorNotes">
-                        <span class="field-label">Uwagi operatora</span>
-                        <textarea id="operatorNotes"></textarea>
-                    </label>
+                    <details class="step-controls">
+                        <summary>Uwagi i sterowanie krokiem</summary>
+                        <div class="step-controls-content">
+                            <label class="designators-box" for="operatorNotes">
+                                <span class="field-label">Uwagi operatora</span>
+                                <textarea id="operatorNotes"></textarea>
+                            </label>
 
-                    <div class="step-actions">
-                        <button type="button" id="doneBtn" class="primary">OK<span class="shortcut">Enter / Space</span></button>
-                        <button type="button" id="problemBtn" class="danger">Problem<span class="shortcut">P</span></button>
-                        <button type="button" id="skipBtn" class="warning">Pomiń<span class="shortcut">S</span></button>
-                    </div>
+                            <div class="step-actions">
+                                <button type="button" id="doneBtn" class="primary">OK<span class="shortcut">Enter / Space</span></button>
+                                <button type="button" id="problemBtn" class="danger">Problem<span class="shortcut">P</span></button>
+                                <button type="button" id="skipBtn" class="warning">Pomiń<span class="shortcut">S</span></button>
+                            </div>
 
-                    <div class="nav-actions">
-                        <button type="button" id="prevBtn">Wstecz<span class="shortcut">←</span></button>
-                        <button type="button" id="nextBtn">Dalej<span class="shortcut">→</span></button>
-                    </div>
+                            <div class="nav-actions">
+                                <button type="button" id="prevBtn">Wstecz<span class="shortcut">←</span></button>
+                                <button type="button" id="nextBtn">Dalej<span class="shortcut">→</span></button>
+                            </div>
+                        </div>
+                    </details>
                 </section>
 
                 <section class="auto-block">
@@ -911,6 +959,7 @@
             currentQuantity: document.getElementById('currentQuantity'),
             currentDesignators: document.getElementById('currentDesignators'),
             polarityNotice: document.getElementById('polarityNotice'),
+            originNotice: document.getElementById('originNotice'),
             operatorNotes: document.getElementById('operatorNotes'),
             tableBody: document.getElementById('tableBody'),
             image: document.getElementById('pcb-image'),
@@ -1087,6 +1136,9 @@
             els.currentIndexCode.textContent = textValue(row, ['Indeks Medcom'], '-');
             els.currentQuantity.textContent = quantity;
             els.currentDesignators.textContent = textValue(row, ['Desygnator'], '-');
+            var origin = textValue(row, ['Pochodzenie'], '');
+            els.originNotice.textContent = origin;
+            els.originNotice.hidden = !origin;
             els.operatorNotes.value = state.notes[currentIndex] !== undefined
                 ? state.notes[currentIndex]
                 : textValue(row, ['UWAGI'], '');
@@ -2138,7 +2190,7 @@
                     return;
                 }
                 var tag = event.target.tagName.toLowerCase();
-                if (tag === 'input' || tag === 'textarea') {
+                if (tag === 'input' || tag === 'textarea' || tag === 'summary' || tag === 'button') {
                     return;
                 }
                 if (event.key === 'ArrowRight') {

@@ -64,6 +64,14 @@ def _display_quantity_for_step(step: dict[str, Any]) -> str:
         return str(step.get("quantity") or 1)
     quantity = sum(int(segment.get("quantity") or 1) for segment in segments)
     pin_count = db.step_pin_count_from_values(str(step.get("value") or ""), segments)
+    pin_counts = {
+        segment_pin_count
+        for segment in segments
+        if (segment_pin_count := int(segment.get("pinCount") or 0)
+            or db.step_pin_count_from_values(str(segment.get("value") or step.get("value") or ""), [segment])) > 0
+    }
+    if len(pin_counts) > 1:
+        return f"{quantity} szt. (różne PIN)"
     return f"{quantity} szt. po {pin_count} PIN" if pin_count else f"{quantity} szt."
 
 
@@ -393,6 +401,8 @@ def render_project_html(project: dict[str, Any]) -> tuple[str, str]:
     for index, step in enumerate(project.get("steps") or [], start=1):
         point_designators = _point_designators_for_step(step)
         used_designators.update(point_designators)
+        origin_notes = db.unit_origin_notes(step)
+        notes = [part.strip() for part in db.note_without_segments(str(step.get("notes") or "")).split("|") if part.strip()]
         table_data.append(
             {
                 "Lp.": index,
@@ -400,7 +410,8 @@ def render_project_html(project: dict[str, Any]) -> tuple[str, str]:
                 "Wartość": _display_value_for_step(step),
                 "Indeks Medcom": str(step.get("medcom_index") or ""),
                 "Ilość": _display_quantity_for_step(step),
-                "UWAGI": db.note_without_segments(str(step.get("notes") or "")),
+                "Pochodzenie": " | ".join(origin_notes),
+                "UWAGI": " | ".join(dict.fromkeys([*notes, *origin_notes])),
                 "Sekundy": step.get("seconds") or "",
             }
         )

@@ -7,6 +7,7 @@ const state = {
   operatorPreviewImage: null,
   activeProjectTab: "summary",
   operatorActiveStepId: null,
+  operatorControlsExpanded: false,
   adminPreviewStepId: null,
   adminPreviewSearch: "",
   adminPreviewView: defaultAdminPreviewView(),
@@ -523,6 +524,7 @@ async function openOperatorProject(projectId) {
   state.selectedProject = await loadProject(projectId);
   state.operatorWorkspaceOpen = true;
   state.operatorActiveStepId = null;
+  state.operatorControlsExpanded = false;
   state.operatorPreviewImage = null;
   setView("operator");
 }
@@ -530,6 +532,7 @@ async function openOperatorProject(projectId) {
 function closeOperatorProject() {
   state.operatorWorkspaceOpen = false;
   state.operatorActiveStepId = null;
+  state.operatorControlsExpanded = false;
   state.operatorPreviewImage = null;
   renderOperatorProjectList();
   renderOperatorSteps();
@@ -1870,10 +1873,12 @@ async function setProjectStatus(status) {
 function stepSegments(step) {
   if (Array.isArray(step.segments) && step.segments.length) {
     return step.segments.map((segment) => ({
-      pinCount: Number(segment.pinCount) || extractPinCount(step.value, 1),
+      pinCount: Number(segment.pinCount) || extractPinCount(segment.value || step.value, 1),
       designators: Array.isArray(segment.designators) ? segment.designators : splitDesignators(segment.label || ""),
       label: segment.label || (Array.isArray(segment.designators) ? segment.designators.join("+") : ""),
       quantity: Number(segment.quantity) || 1,
+      value: segment.value || step.value || "",
+      medcomIndex: segment.medcomIndex || step.medcom_index || "",
     }));
   }
 
@@ -1898,11 +1903,23 @@ function stepSegments(step) {
       designators: splitDesignators(label.replaceAll("+", ",")),
       label,
       quantity: 1,
+      value: step.value || "",
+      medcomIndex: step.medcom_index || "",
     }));
 }
 
 function stepNotesWithoutSegments(step) {
   return String(step.notes || "").replace(/\s*\|\s*Odcinki:\s*.+$/i, "");
+}
+
+function stepDisplayNotes(step) {
+  const notes = stepNotesWithoutSegments(step).split("|").map((part) => part.trim()).filter(Boolean);
+  (step.unit_origin_notes || []).forEach((part) => {
+    if (!notes.includes(part)) {
+      notes.push(part);
+    }
+  });
+  return notes.join(" | ");
 }
 
 function stepPinCount(step) {
@@ -1936,7 +1953,17 @@ function renderStepPieces(step) {
   }
   return `
     <div class="segment-list">
-      ${segments.map((segment) => `<span class="segment-pill">${escapeHtml(segment.label || segment.designators.join("+"))}</span>`).join("")}
+      ${segments.map((segment) => {
+        const origin = [];
+        if (String(segment.value).trim().toUpperCase() !== String(step.value || "").trim().toUpperCase()) {
+          origin.push(segment.value);
+        }
+        if (normalizeMedcomIndex(segment.medcomIndex) !== normalizeMedcomIndex(step.medcom_index)) {
+          origin.push(`indeks ${segment.medcomIndex}`);
+        }
+        const label = segment.label || segment.designators.join("+");
+        return `<span class="segment-pill">${escapeHtml(label)}${origin.length ? ` (${escapeHtml(origin.join(" / "))})` : ""}</span>`;
+      }).join("")}
     </div>
   `;
 }
@@ -1948,6 +1975,10 @@ function renderStepQuantity(step) {
   }
   const quantity = segments.reduce((total, segment) => total + (Number(segment.quantity) || 1), 0);
   const pinCount = stepPinCount(step);
+  const pinCounts = new Set(segments.map((segment) => Number(segment.pinCount) || pinCount).filter(Boolean));
+  if (pinCounts.size > 1) {
+    return `${quantity} szt. (różne PIN)`;
+  }
   const suffix = pinCount ? ` po ${pinCount} PIN` : "";
   return `${quantity} szt.${suffix}`;
 }
@@ -1961,6 +1992,8 @@ function stepUnitsForPro(step) {
       designators: segment.designators || [],
       quantity: Number(segment.quantity) || 1,
       pinCount: Number(segment.pinCount) || 0,
+      value: segment.value || step.value || "",
+      medcomIndex: segment.medcomIndex || step.medcom_index || "",
     }));
   }
   return splitDesignators(step.designators).map((designator, index) => ({
@@ -1969,6 +2002,8 @@ function stepUnitsForPro(step) {
     designators: [designator],
     quantity: 1,
     pinCount: 0,
+    value: step.value || "",
+    medcomIndex: step.medcom_index || "",
   }));
 }
 
@@ -1988,10 +2023,7 @@ function renderLineProEditor(project) {
   const targetOptions = (project.steps || [])
     .filter((item) => Number(item.id) !== Number(step.id))
     .map((item) => {
-      const sameValue = String(renderStepValue(item)).trim().toUpperCase() === String(renderStepValue(step)).trim().toUpperCase();
-      const sameIndex = normalizeMedcomIndex(item.medcom_index) === normalizeMedcomIndex(step.medcom_index);
-      const disabled = sameValue && sameIndex ? "" : "disabled";
-      return `<option value="${item.id}" ${disabled}>${item.step_no}. ${escapeHtml(renderStepValue(item))} | ${escapeHtml(item.designators)}</option>`;
+      return `<option value="${item.id}">${item.step_no}. ${escapeHtml(renderStepValue(item))} | ${escapeHtml(item.designators)}</option>`;
     })
     .join("");
 
@@ -2026,14 +2058,14 @@ function renderLineProEditor(project) {
       <div class="pro-unit-tools">
         <div>
           <strong>Sztuki / odcinki w tej linii</strong>
-          <span>Zaznacz elementy, które mają iść osobno albo do innej linii.</span>
+          <span>Zaznacz elementy do rozdzielenia lub przeniesienia. Możesz wybrać linię o innej wartości lub indeksie.</span>
         </div>
         <div class="pro-unit-list">
           ${units.map((unit) => `
             <label class="pro-unit">
               <input type="checkbox" data-pro-unit-index="${unit.index}">
               <span>${escapeHtml(unit.label)}</span>
-              <em>${escapeHtml((unit.designators || []).join(","))}${unit.pinCount ? ` | ${unit.pinCount} PIN` : ""}</em>
+              <em>${escapeHtml((unit.designators || []).join(","))}${unit.pinCount ? ` | ${unit.pinCount} PIN` : ""}${normalizeMedcomIndex(unit.medcomIndex) !== normalizeMedcomIndex(step.medcom_index) ? ` | ${escapeHtml(unit.medcomIndex)}` : ""}</em>
             </label>
           `).join("")}
         </div>
@@ -2314,7 +2346,7 @@ function renderAdminPreviewTab(project) {
             <em>${escapeHtml(currentStep.medcom_index || "-")} | ${escapeHtml(renderStepQuantity(currentStep))}</em>
             <div>${renderStepPieces(currentStep)}</div>
             ${missing.length ? `<p>Bez punktu P&amp;P: ${escapeHtml(missing.join(", "))}</p>` : ""}
-            ${stepNotesWithoutSegments(currentStep) ? `<p>${escapeHtml(stepNotesWithoutSegments(currentStep))}</p>` : ""}
+            ${stepDisplayNotes(currentStep) ? `<p>${escapeHtml(stepDisplayNotes(currentStep))}</p>` : ""}
           </div>
         ` : ""}
         <div class="table-wrap admin-preview-list">
@@ -4208,26 +4240,34 @@ function renderOperatorSteps() {
           ${renderStepPieces(currentStep)}
         </div>
         ${renderOperatorPolarityNotice(currentPolarity)}
-        ${stepNotesWithoutSegments(currentStep) ? `<div class="operator-tech-note">${escapeHtml(stepNotesWithoutSegments(currentStep))}</div>` : ""}
-        <label class="operator-note-field">
-          Uwagi operatora
-          <textarea rows="3" data-operator-note>${escapeHtml(event ? event.note : "")}</textarea>
-        </label>
-        <div class="operator-action-grid">
-          <button type="button" class="operator-ok" data-operator-status="done">OK</button>
-          <button type="button" class="operator-problem" data-operator-status="problem">Problem</button>
-          <button type="button" data-operator-status="skipped">Pomiń</button>
-        </div>
-        <div class="operator-nav-actions">
-          <button type="button" data-operator-prev ${currentIndex <= 0 ? "disabled" : ""}>Wstecz</button>
-          <button type="button" data-operator-next ${currentIndex >= operatorSteps.length - 1 ? "disabled" : ""}>Dalej</button>
-        </div>
+        ${stepDisplayNotes(currentStep) ? `<div class="operator-tech-note">${escapeHtml(stepDisplayNotes(currentStep))}</div>` : ""}
+        <details class="operator-controls" data-operator-controls ${state.operatorControlsExpanded ? "open" : ""}>
+          <summary>Uwagi i sterowanie krokiem</summary>
+          <div class="operator-controls-content">
+            <label class="operator-note-field">
+              Uwagi operatora
+              <textarea rows="3" data-operator-note>${escapeHtml(event ? event.note : "")}</textarea>
+            </label>
+            <div class="operator-action-grid">
+              <button type="button" class="operator-ok" data-operator-status="done">OK</button>
+              <button type="button" class="operator-problem" data-operator-status="problem">Problem</button>
+              <button type="button" data-operator-status="skipped">Pomiń</button>
+            </div>
+            <div class="operator-nav-actions">
+              <button type="button" data-operator-prev ${currentIndex <= 0 ? "disabled" : ""}>Wstecz</button>
+              <button type="button" data-operator-next ${currentIndex >= operatorSteps.length - 1 ? "disabled" : ""}>Dalej</button>
+            </div>
+          </div>
+        </details>
       </section>
       ${renderOperatorStepList(operatorSteps, currentStep)}
     </div>
     ${renderOperatorPreviewModal(state.selectedProject)}
   `;
 
+  els.operatorSteps.querySelector("[data-operator-controls]")?.addEventListener("toggle", (event) => {
+    state.operatorControlsExpanded = event.currentTarget.open;
+  });
   els.operatorSteps.querySelectorAll("[data-operator-status]").forEach((button) => {
     button.addEventListener("click", () => {
       const note = els.operatorSteps.querySelector("[data-operator-note]")?.value || "";

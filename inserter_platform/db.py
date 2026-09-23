@@ -391,6 +391,7 @@ def step_row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
         item["segments"] = json.loads(raw_segments) if raw_segments else []
     except json.JSONDecodeError:
         item["segments"] = []
+    item["unit_origin_notes"] = unit_origin_notes(item)
     return item
 
 
@@ -430,6 +431,7 @@ def append_project_change(
 
 
 def step_units_from_row(row: sqlite3.Row | dict[str, Any]) -> list[dict[str, Any]]:
+    source = dict(row)
     segments = step_segments_from_row(row)
     if segments:
         units: list[dict[str, Any]] = []
@@ -448,6 +450,8 @@ def step_units_from_row(row: sqlite3.Row | dict[str, Any]) -> list[dict[str, Any
                     "designators": list(dict.fromkeys(designators)),
                     "quantity": int(segment.get("quantity") or 1),
                     "label": label,
+                    "value": str(segment.get("value") or source.get("value") or "").strip(),
+                    "medcomIndex": str(segment.get("medcomIndex") or source.get("medcom_index") or "").strip(),
                 }
             )
         return units
@@ -458,9 +462,31 @@ def step_units_from_row(row: sqlite3.Row | dict[str, Any]) -> list[dict[str, Any
             "designators": [designator],
             "quantity": 1,
             "label": designator,
+            "value": str(source.get("value") or "").strip(),
+            "medcomIndex": str(source.get("medcom_index") or "").strip(),
         }
-        for designator in split_designators(str(dict(row).get("designators") or ""))
+        for designator in split_designators(str(source.get("designators") or ""))
     ]
+
+
+def unit_origin_notes(row: sqlite3.Row | dict[str, Any]) -> list[str]:
+    source = dict(row)
+    value_key = normalize_line_key(str(source.get("value") or ""))
+    index_key = normalize_medcom_index(str(source.get("medcom_index") or ""))
+    groups: dict[tuple[str, ...], list[str]] = {}
+    for unit in step_units_from_row(source):
+        unit_value = str(unit.get("value") or "").strip()
+        unit_index = str(unit.get("medcomIndex") or "").strip()
+        details = []
+        if unit_value and normalize_line_key(unit_value) != value_key:
+            details.append(unit_value)
+        if unit_index and normalize_medcom_index(unit_index) != index_key:
+            details.append(f"indeks {unit_index}")
+        if details:
+            label = str(unit.get("label") or "+".join(unit.get("designators") or [])).strip()
+            if label:
+                groups.setdefault(tuple(details), []).append(label)
+    return [f"{', '.join(labels)}: {' / '.join(details)}" for details, labels in groups.items()]
 
 
 def selected_units(units: list[dict[str, Any]], indexes: list[Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
@@ -487,6 +513,8 @@ def line_fields_from_units(
     notes: str | None = None,
 ) -> dict[str, Any]:
     source = dict(row)
+    line_value = str(value if value is not None else source.get("value") or "").strip()
+    line_index = str(medcom_index if medcom_index is not None else source.get("medcom_index") or "").strip()
     clean_units = [
         {
             "pinCount": int(unit.get("pinCount") or 0),
@@ -497,6 +525,8 @@ def line_fields_from_units(
             ],
             "quantity": max(1, int(unit.get("quantity") or 1)),
             "label": str(unit.get("label") or "").strip(),
+            "value": str(unit.get("value") or line_value).strip(),
+            "medcomIndex": str(unit.get("medcomIndex") or line_index).strip(),
         }
         for unit in units
         if unit.get("designators")
@@ -514,6 +544,8 @@ def line_fields_from_units(
         or unit["pinCount"] > 0
         or unit["label"] != unit["designators"][0]
         or unit["quantity"] != 1
+        or normalize_line_key(unit["value"]) != normalize_line_key(line_value)
+        or normalize_medcom_index(unit["medcomIndex"]) != normalize_medcom_index(line_index)
         for unit in clean_units
     )
     clean_notes = str(notes if notes is not None else source.get("notes") or "").strip()
@@ -522,8 +554,8 @@ def line_fields_from_units(
 
     return {
         "designators": ",".join(designators),
-        "value": str(value if value is not None else source.get("value") or "").strip(),
-        "medcom_index": str(medcom_index if medcom_index is not None else source.get("medcom_index") or "").strip(),
+        "value": line_value,
+        "medcom_index": line_index,
         "quantity": sum(int(unit.get("quantity") or 1) for unit in clean_units) or len(designators) or 1,
         "notes": clean_notes,
         "segments_json": json.dumps(clean_units, ensure_ascii=False) if has_segments else "",
@@ -555,6 +587,8 @@ def step_segments_from_row(row: sqlite3.Row | dict[str, Any]) -> list[dict[str, 
                         ],
                         "quantity": int(segment.get("quantity") or 1),
                         "label": str(segment.get("label") or "").strip(),
+                        "value": str(segment.get("value") or "").strip(),
+                        "medcomIndex": str(segment.get("medcomIndex") or "").strip(),
                     }
                     for segment in segments
                     if isinstance(segment, dict)
@@ -1688,11 +1722,6 @@ def move_step_units(
         ).fetchone()
         if source is None or target is None:
             return None
-        if normalize_line_key(source["value"]) != normalize_line_key(target["value"]):
-            raise ValueError("Linie maja rozne wartosci. Najpierw ujednolic opis albo rozdziel do nowej linii.")
-        if normalize_medcom_index(source["medcom_index"]) != normalize_medcom_index(target["medcom_index"]):
-            raise ValueError("Linie maja rozne indeksy Medcom.")
-
         picked_units, remaining_units = selected_units(step_units_from_row(source), unit_indexes)
         source_fields = line_fields_from_units(source, remaining_units) if remaining_units else None
         target_units = [*step_units_from_row(target), *picked_units]
