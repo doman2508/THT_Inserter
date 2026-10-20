@@ -567,6 +567,24 @@ class PlatformHandler(BaseHTTPRequestHandler):
                 self.send_json(201, {"step": step})
                 return
 
+            if path.startswith("/api/projects/") and path.endswith("/delete-designators"):
+                parts = path.split("/")
+                if len(parts) != 7 or parts[4] != "steps":
+                    raise ApiError(404, "Not found")
+                project_id = parts[3]
+                try:
+                    project = db.delete_step_designators(
+                        project_id=project_id,
+                        step_id=parse_int(parts[5]),
+                        designators=payload.get("designators"),
+                    )
+                except ValueError as error:
+                    raise ApiError(400, str(error)) from error
+                if project is None:
+                    raise ApiError(404, "Step not found")
+                self.send_json(200, {"project": project})
+                return
+
             if path.startswith("/api/projects/") and path.endswith("/split-units"):
                 parts = path.split("/")
                 project_id = parts[3]

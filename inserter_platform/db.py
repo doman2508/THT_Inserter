@@ -640,7 +640,7 @@ def step_pin_count_from_values(value: str, segments: list[dict[str, Any]]) -> in
 
 
 def note_without_segments(notes: str) -> str:
-    return re.sub(r"\s*\|\s*Odcinki:\s*.+$", "", notes or "", flags=re.IGNORECASE).strip()
+    return re.sub(r"(?:^|\s*\|\s*)Odcinki:\s*.+$", "", notes or "", flags=re.IGNORECASE).strip()
 
 
 def row_pin_segments_for_consolidation(row: sqlite3.Row | dict[str, Any]) -> tuple[int, list[dict[str, Any]]]:
@@ -1511,6 +1511,78 @@ def delete_step(project_id: str, step_id: int) -> dict[str, Any] | None:
             [(index + 1, timestamp, row["id"]) for index, row in enumerate(remaining)],
         )
         db.execute("UPDATE projects SET updated_at = ? WHERE id = ?", (timestamp, project_id))
+    return get_project(project_id)
+
+
+def delete_step_designators(
+    project_id: str,
+    step_id: int,
+    designators: list[Any],
+) -> dict[str, Any] | None:
+    if not isinstance(designators, list) or not designators or any(
+        not isinstance(item, str) or not item.strip() for item in designators
+    ):
+        raise ValueError("Zaznacz desygnatory do usunięcia.")
+    selected = set(item.strip().upper() for item in designators)
+    timestamp = now_iso()
+    with connect() as db:
+        step = db.execute(
+            "SELECT * FROM placement_steps WHERE project_id = ? AND id = ?",
+            (project_id, step_id),
+        ).fetchone()
+        if step is None:
+            return None
+        units = step_units_from_row(step)
+        available = {item for unit in units for item in unit["designators"]}
+        unknown = selected - available
+        if unknown:
+            raise ValueError(
+                "Te desygnatory nie należą już do tej linii: "
+                + ", ".join(sorted(unknown, key=natural_designator_key))
+                + ". Odśwież widok i zaznacz ponownie."
+            )
+
+        remaining_units = []
+        for unit in units:
+            remaining = [item for item in unit["designators"] if item not in selected]
+            if not remaining:
+                continue
+            if remaining != unit["designators"]:
+                # Removing a board point does not change the physical part's pin count or quantity.
+                unit = {**unit, "designators": remaining, "label": "+".join(remaining)}
+            remaining_units.append(unit)
+
+        if remaining_units:
+            fields = line_fields_from_units(
+                step, remaining_units, notes=note_without_segments(str(step["notes"] or ""))
+            )
+            db.execute(
+                """
+                UPDATE placement_steps
+                SET designators = ?, quantity = ?, notes = ?, segments_json = ?, updated_at = ?
+                WHERE project_id = ? AND id = ?
+                """,
+                (
+                    fields["designators"], fields["quantity"], fields["notes"],
+                    fields["segments_json"], timestamp, project_id, step_id,
+                ),
+            )
+        else:
+            db.execute("DELETE FROM placement_steps WHERE project_id = ? AND id = ?", (project_id, step_id))
+            rows = db.execute(
+                "SELECT id FROM placement_steps WHERE project_id = ? ORDER BY step_no, id",
+                (project_id,),
+            ).fetchall()
+            db.executemany(
+                "UPDATE placement_steps SET step_no = ?, updated_at = ? WHERE id = ?",
+                [(index + 1, timestamp, row["id"]) for index, row in enumerate(rows)],
+            )
+        append_project_change(
+            db, project_id, "step_delete_designators",
+            f"Usunięto z linii {step['step_no']}: {', '.join(sorted(selected, key=natural_designator_key))}.",
+            timestamp,
+        )
+        db.execute("UPDATE projects SET status = 'prepared', updated_at = ? WHERE id = ?", (timestamp, project_id))
     return get_project(project_id)
 
 

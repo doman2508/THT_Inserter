@@ -1608,9 +1608,26 @@ async function deleteStep(stepId) {
 }
 
 function checkedProUnitIndexes() {
+  if (Array.from(els.projectDetails.querySelectorAll("[data-pro-unit-index]")).some((input) => input.indeterminate)) {
+    throw new Error("Do przenoszenia lub rozdzielania zaznacz cały odcinek. Pojedyncze desygnatory możesz usunąć przyciskiem „Usuń zaznaczone”.");
+  }
   return Array.from(els.projectDetails.querySelectorAll("[data-pro-unit-index]:checked"))
     .map((input) => Number(input.dataset.proUnitIndex))
     .filter((index) => Number.isFinite(index));
+}
+
+function checkedProDesignators() {
+  const step = state.selectedProject?.steps?.find((item) => Number(item.id) === Number(state.proEditorStepId));
+  if (!step) {
+    return [];
+  }
+  const units = stepUnitsForPro(step);
+  const selected = new Set();
+  els.projectDetails.querySelectorAll("[data-pro-unit-index]:checked").forEach((input) => {
+    (units[Number(input.dataset.proUnitIndex)]?.designators || []).forEach((item) => selected.add(item));
+  });
+  els.projectDetails.querySelectorAll("[data-pro-designator]:checked").forEach((input) => selected.add(input.dataset.proDesignator));
+  return [...selected];
 }
 
 async function runProAction(action) {
@@ -1670,6 +1687,68 @@ function attachLineProTools() {
   els.projectDetails.querySelectorAll("[data-pro-move-units]").forEach((button) => {
     button.addEventListener("click", () => runProAction(() => moveProUnits(button.dataset.proMoveUnits)));
   });
+  const deleteButton = els.projectDetails.querySelector("[data-pro-delete-designators]");
+  const updateDeleteButton = () => {
+    if (!deleteButton) {
+      return;
+    }
+    const count = checkedProDesignators().length;
+    deleteButton.disabled = !count;
+    deleteButton.textContent = `Usuń zaznaczone (${count})`;
+  };
+  els.projectDetails.querySelectorAll(".pro-unit").forEach((card) => {
+    const parent = card.querySelector("[data-pro-unit-index]");
+    const children = Array.from(card.querySelectorAll("[data-pro-designator]"));
+    parent.addEventListener("change", () => {
+      children.forEach((input) => { input.checked = parent.checked; });
+      parent.indeterminate = false;
+      updateDeleteButton();
+    });
+    children.forEach((input) => {
+      input.addEventListener("change", () => {
+        parent.checked = children.every((child) => child.checked);
+        parent.indeterminate = !parent.checked && children.some((child) => child.checked);
+        updateDeleteButton();
+      });
+    });
+  });
+  deleteButton?.addEventListener("click", () => runProAction(() => deleteProDesignators(deleteButton)));
+  updateDeleteButton();
+}
+
+async function deleteProDesignators(button) {
+  if (!state.selectedProject) {
+    return;
+  }
+  const stepId = Number(button.dataset.proDeleteDesignators);
+  const step = state.selectedProject.steps.find((item) => Number(item.id) === stepId);
+  const designators = checkedProDesignators();
+  if (!step || !designators.length) {
+    return;
+  }
+  const allDesignators = new Set(stepUnitsForPro(step).flatMap((unit) => unit.designators));
+  const removesLine = designators.length === allDesignators.size;
+  const message = `Usunąć z linii ${step.step_no}: ${designators.join(", ")}?`
+    + (removesLine ? "\n\nLinia będzie pusta i zostanie usunięta." : "\n\nPozostałe desygnatory zostaną zachowane.");
+  if (!window.confirm(message)) {
+    return;
+  }
+  button.disabled = true;
+  try {
+    const response = await api(`/api/projects/${state.selectedProject.id}/steps/${stepId}/delete-designators`, {
+      method: "POST",
+      body: JSON.stringify({ designators }),
+    });
+    state.selectedProject = response.project;
+    if (!response.project.steps.some((item) => Number(item.id) === stepId)) {
+      state.selectedLineIds.delete(stepId);
+      state.proEditorStepId = null;
+    }
+    await loadProjects();
+    await selectProject(response.project.id, "lines");
+  } finally {
+    button.disabled = false;
+  }
 }
 
 async function saveProStepDetails(form) {
@@ -1909,7 +1988,7 @@ function stepSegments(step) {
 }
 
 function stepNotesWithoutSegments(step) {
-  return String(step.notes || "").replace(/\s*\|\s*Odcinki:\s*.+$/i, "");
+  return String(step.notes || "").replace(/(?:^|\s*\|\s*)Odcinki:\s*.+$/i, "");
 }
 
 function stepDisplayNotes(step) {
@@ -2058,15 +2137,27 @@ function renderLineProEditor(project) {
       <div class="pro-unit-tools">
         <div>
           <strong>Sztuki / odcinki w tej linii</strong>
-          <span>Zaznacz elementy do rozdzielenia lub przeniesienia. Możesz wybrać linię o innej wartości lub indeksie.</span>
+          <span>Zaznacz całe sztuki/odcinki do przeniesienia, rozdzielenia lub usunięcia. Checkboxy pod odcinkiem pozwalają usunąć pojedyncze desygnatory; parametry odcinka pozostają bez zmian.</span>
         </div>
         <div class="pro-unit-list">
           ${units.map((unit) => `
-            <label class="pro-unit">
-              <input type="checkbox" data-pro-unit-index="${unit.index}">
-              <span>${escapeHtml(unit.label)}</span>
-              <em>${escapeHtml((unit.designators || []).join(","))}${unit.pinCount ? ` | ${unit.pinCount} PIN` : ""}${normalizeMedcomIndex(unit.medcomIndex) !== normalizeMedcomIndex(step.medcom_index) ? ` | ${escapeHtml(unit.medcomIndex)}` : ""}</em>
-            </label>
+            <div class="pro-unit">
+              <label class="pro-unit-head">
+                <input type="checkbox" data-pro-unit-index="${unit.index}">
+                <span>${escapeHtml(unit.label)}</span>
+                <em>${escapeHtml((unit.designators || []).join(","))}${unit.pinCount ? ` | ${unit.pinCount} PIN` : ""}${normalizeMedcomIndex(unit.medcomIndex) !== normalizeMedcomIndex(step.medcom_index) ? ` | ${escapeHtml(unit.medcomIndex)}` : ""}</em>
+              </label>
+              ${unit.designators.length > 1 ? `
+                <div class="pro-designator-list" role="group" aria-label="Desygnatory odcinka ${escapeHtml(unit.label)}">
+                  ${unit.designators.map((designator) => `
+                    <label class="pro-designator">
+                      <input type="checkbox" data-pro-designator="${escapeHtml(designator)}">
+                      <span>${escapeHtml(designator)}</span>
+                    </label>
+                  `).join("")}
+                </div>
+              ` : ""}
+            </div>
           `).join("")}
         </div>
         <div class="pro-actions-row">
@@ -2079,6 +2170,7 @@ function renderLineProEditor(project) {
             </select>
           </label>
           <button type="button" data-pro-move-units="${step.id}">Przenieś zaznaczone</button>
+          <button type="button" class="danger" data-pro-delete-designators="${step.id}" disabled>Usuń zaznaczone (0)</button>
         </div>
       </div>
     </section>
