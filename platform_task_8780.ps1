@@ -49,10 +49,22 @@ function New-PlatformTaskXml {
 "@
 }
 
+function Get-PlatformTaskUserKey {
+    param([string]$UserId)
+    if (-not $UserId) { return '' }
+    if ($UserId -match '^S-1-') { return $UserId.ToUpperInvariant() }
+    try {
+        $account = New-Object Security.Principal.NTAccount -ArgumentList $UserId
+        return $account.Translate([Security.Principal.SecurityIdentifier]).Value
+    } catch {
+        return $UserId.ToUpperInvariant()
+    }
+}
+
 function Get-PlatformTaskSignature {
     param($Definition)
     $settings = $Definition.Settings
-    $values = @($Definition.Principal.UserId, $Definition.Principal.LogonType, $Definition.Principal.RunLevel)
+    $values = @((Get-PlatformTaskUserKey $Definition.Principal.UserId), $Definition.Principal.LogonType, $Definition.Principal.RunLevel)
     foreach ($property in @('MultipleInstances', 'DisallowStartIfOnBatteries', 'StopIfGoingOnBatteries',
         'AllowHardTerminate', 'StartWhenAvailable', 'RunOnlyIfNetworkAvailable', 'AllowDemandStart',
         'Hidden', 'RunOnlyIfIdle', 'WakeToRun', 'ExecutionTimeLimit', 'RestartInterval', 'RestartCount')) {
@@ -63,7 +75,7 @@ function Get-PlatformTaskSignature {
         $values += @($trigger.Id, $trigger.Type, $trigger.Enabled, $trigger.StartBoundary, $trigger.EndBoundary,
             $trigger.ExecutionTimeLimit, $trigger.Repetition.Interval, $trigger.Repetition.Duration, $trigger.Repetition.StopAtDurationEnd)
         if ($trigger.Type -eq 8) { $values += $trigger.Delay }
-        if ($trigger.Type -eq 9) { $values += @($trigger.Delay, $trigger.UserId) }
+        if ($trigger.Type -eq 9) { $values += @($trigger.Delay, (Get-PlatformTaskUserKey $trigger.UserId)) }
     }
     foreach ($action in $Definition.Actions) {
         $values += @($action.Type, $action.Path, $action.Arguments, $action.WorkingDirectory)

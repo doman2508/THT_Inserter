@@ -15,10 +15,11 @@ foreach ($name in @('deploy_server_8780.ps1', 'deploy_from_local_8780.ps1', 'run
 
 $service = New-Object -ComObject 'Schedule.Service'
 $service.Connect()
+$taskUser = [Security.Principal.WindowsIdentity]::GetCurrent().Name
 foreach ($mode in @('InteractiveToken', 'Password', 'S4U')) {
     foreach ($boot in @($false, $true)) {
         $xml = New-PlatformTaskXml -RepoPath 'C:\Task test & spaces\Inserter' -Port 18780 -BindHost '127.0.0.1' `
-            -PublicUrl 'http://127.0.0.1:18780/?a=1&b=2' -UserId 'SERVER\Remote01' -LogonType $mode `
+            -PublicUrl 'http://127.0.0.1:18780/?a=1&b=2' -UserId $taskUser -LogonType $mode `
             -StartBoundary '2026-10-23T10:00:00' -BootTrigger $boot
         $definition = $service.NewTask(0)
         $definition.XmlText = $xml
@@ -40,6 +41,8 @@ foreach ($mode in @('InteractiveToken', 'Password', 'S4U')) {
         $roundtrip = $service.NewTask(0)
         $roundtrip.XmlText = $definition.XmlText
         Assert-Equal (Get-PlatformTaskSignature $definition) (Get-PlatformTaskSignature $roundtrip) 'Idempotent task configuration'
+        $roundtrip.Triggers.Item(2).UserId = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+        Assert-Equal (Get-PlatformTaskSignature $definition) (Get-PlatformTaskSignature $roundtrip) 'Account name and SID are equivalent'
         $roundtrip.Settings.ExecutionTimeLimit = 'PT72H'
         if ((Get-PlatformTaskSignature $definition) -eq (Get-PlatformTaskSignature $roundtrip)) { throw 'Regression to 72h was not detected' }
     }
