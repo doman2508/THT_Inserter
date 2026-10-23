@@ -1,4 +1,4 @@
-# Deploy testowy MSX THT Inserter na porcie 8780
+# Deploy MSX THT Inserter na porcie 8780
 
 Ten wariant jest odpowiednikiem deploya z innej aplikacji na porcie 3000, ale dopasowany do Insertera.
 
@@ -9,11 +9,57 @@ Serwer:
 - pracuje w katalogu `C:\Users\Remote01\Desktop\Apki\THT_Inserter`,
 - aktualizuje branch `main`,
 - przerywa deploy, jezeli working tree na serwerze nie jest czysty,
-- ubija proces sluchajacy na porcie `8780`,
+- konfiguruje zadanie bez limitu 72 godzin (`ExecutionTimeLimit = PT0S`),
+- ponawia uruchomienie po awarii co minute; dodatkowy wyzwalacz co minute nie wygasa i nie uruchamia drugiej kopii dzialajacej aplikacji,
+- rejestruje konfiguracje przed zatrzymaniem aplikacji (blad uprawnien nie powoduje przerwy),
+- wylacza ponawianie na czas deploya, zatrzymuje stare zadanie i proces na porcie `8780`,
 - uruchamia aplikacje na `0.0.0.0:8780`,
 - sprawdza `http://127.0.0.1:8780/api/health`.
 
 Katalog `data\` jest ignorowany przez Git, wiec baza projektow i uploady na serwerze zostaja na serwerze.
+Kopia poprzedniej definicji zadania trafia do `data\deploy-backups\` (bez hasla).
+
+## Jednorazowy autostart bez zalogowanego uzytkownika
+
+Zwykle konto SSH moze nie miec uprawnien do utworzenia zadania w tle.
+Wtedy deploy zachowuje dotychczasowy tryb interaktywny i wyswietla ostrzezenie
+`SESSION-DEPENDENT MODE`. Limit czasu i ponawianie sa naprawione, ale start po
+restarcie komputera bez logowania wymaga ponizszego kroku.
+
+Na serwerze uruchom PowerShell **jako administrator**, po aktualizacji repozytorium:
+
+```powershell
+cd C:\Users\Remote01\Desktop\Apki\THT_Inserter
+$inserterCredential = Get-Credential -UserName 'WIN-OGJFAFPNMCU\Remote01' -Message 'Konto do uruchamiania Insertera w tle'
+.\deploy_server_8780.ps1 -SkipGitPull -TaskCredential $inserterCredential
+Remove-Variable inserterCredential
+```
+
+Haslo wpisuje sie tylko w oknie Windows, nie w kodzie ani w czacie. Harmonogram
+przechowuje je systemowo. Aplikacja nadal pracuje jako `Remote01` z najnizszym
+poziomem uprawnien, nie jako SYSTEM ani administrator. Administrator rejestruje
+wyzwalacz startu systemu z opoznieniem 30 sekund oraz start niezalezny od sesji.
+Konto musi miec prawo **Log on as a batch job**; jezeli polityka domeny go blokuje,
+administrator musi to skorygowac. Nie zmieniamy automatycznie polityk systemu.
+
+Kolejne deploye zachowuja gotowe zadanie i zapisane poswiadczenia, jesli jego
+konfiguracja sie nie zmienila. Zmiana ustawien zadania w tle wymaga ponownego
+podania `-TaskCredential` przez administratora; skrypt zatrzyma sie przed restartem.
+Zmiana hasla konta wymaga tez aktualizacji poswiadczen zadania.
+
+## Logi i kontrola
+
+- `logs\inserter_platform_8780.lifecycle.log`: start, PID, kod zakonczenia.
+- `logs\inserter_platform_8780.<czas>-<PID>.stdout.log` i `.stderr.log`: osobne logi
+  kazdego uruchomienia; Python zapisuje je bez buforowania, poprzednie logi zostaja.
+- Kazde nieoczekiwane zakonczenie Pythona, takze kodem 0, daje kod 1 runnera,
+  aby Harmonogram ponowil start. Zwykle komunikaty stderr nie przerywaja runnera.
+- Celowe dluzsze wylaczenie: **najpierw wylacz zadanie w Harmonogramie**, a potem
+  je zatrzymaj. Samo zatrzymanie procesu uruchomi automatyczne odzyskiwanie.
+- Test konfiguracji (bez tworzenia zadan): `powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\test_platform_task.ps1`.
+- Testy aplikacji i runnera: `.\.venv\Scripts\python.exe -m unittest discover -s tests -v`.
+- Test faktycznego restartu Harmonogramu (okolo minuty, tworzy i usuwa osobne zadanie,
+  nie przerywa aplikacji): `powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\test_platform_recovery.ps1`.
 
 ## Pierwsze uruchomienie na serwerze
 

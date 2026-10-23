@@ -6,7 +6,8 @@ param(
     [string]$PublicUrl = "http://192.168.1.10:8780",
     [string]$TaskName = "MSX THT Inserter 8780",
     [switch]$SkipGitPull,
-    [switch]$InstallRequirements
+    [switch]$InstallRequirements,
+    [System.Management.Automation.PSCredential]$TaskCredential
 )
 
 $ErrorActionPreference = "Stop"
@@ -68,36 +69,6 @@ function Wait-HealthCheck {
     throw "Application did not respond on $uri"
 }
 
-function Start-PlatformTask {
-    param(
-        [string]$LocalRepoPath,
-        [int]$LocalPort,
-        [string]$LocalBindHost,
-        [string]$LocalPublicUrl,
-        [string]$LocalTaskName
-    )
-
-    $runner = Join-Path $LocalRepoPath "run_platform_8780.ps1"
-    if (-not (Test-Path $runner)) {
-        throw "Runner script not found: $runner"
-    }
-
-    $taskCommand = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$runner`" -RepoPath `"$LocalRepoPath`" -Port $LocalPort -BindHost `"$LocalBindHost`" -PublicUrl `"$LocalPublicUrl`""
-    Invoke-Checked "schtasks.exe" @(
-        "/Create",
-        "/TN",
-        $LocalTaskName,
-        "/TR",
-        $taskCommand,
-        "/SC",
-        "ONCE",
-        "/ST",
-        "23:59",
-        "/F"
-    )
-    Invoke-Checked "schtasks.exe" @("/Run", "/TN", $LocalTaskName)
-}
-
 Set-Location $RepoPath
 
 if (-not (Test-Path ".git")) {
@@ -116,7 +87,15 @@ if (-not $SkipGitPull) {
     Invoke-Checked "git" @("fetch", "origin")
     Invoke-Checked "git" @("checkout", $Branch)
     Invoke-Checked "git" @("pull", "--ff-only", "origin", $Branch)
+
+    # Reload the deployed script, not the copy parsed before git pull.
+    & $PSCommandPath -RepoPath $RepoPath -Branch $Branch -Port $Port -BindHost $BindHost `
+        -PublicUrl $PublicUrl -TaskName $TaskName -SkipGitPull `
+        -InstallRequirements:$InstallRequirements -TaskCredential $TaskCredential
+    return
 }
+
+. (Join-Path $RepoPath 'platform_task_8780.ps1')
 
 $python = Join-Path $RepoPath ".venv\Scripts\python.exe"
 if (-not (Test-Path $python)) {
@@ -129,18 +108,30 @@ if ($InstallRequirements) {
     Invoke-Checked $python @("-m", "pip", "install", "-r", "requirements.txt")
 }
 
-Stop-PortListener -LocalPort $Port
-Start-Sleep -Seconds 1
+$runner = Join-Path $RepoPath 'run_platform_8780.ps1'
+if (-not (Test-Path -LiteralPath $runner)) { throw "Runner script not found: $runner" }
 
+# Register and verify permissions before taking the running app offline.
+$platformTask = Register-PlatformTask -RepoPath $RepoPath -Port $Port -BindHost $BindHost `
+    -PublicUrl $PublicUrl -TaskName $TaskName -TaskCredential $TaskCredential
+
+# Prevent the recovery trigger from racing the deployment restart.
+$platformTask.Enabled = $false
+try {
+    $platformTask.Stop(0)
+    for ($i = 0; $i -lt 20 -and $platformTask.GetInstances(0).Count -gt 0; $i++) {
+        Start-Sleep -Milliseconds 250
+    }
+    if ($platformTask.GetInstances(0).Count -gt 0) { throw 'Previous task instance did not stop.' }
+    Stop-PortListener -LocalPort $Port
+    Start-Sleep -Seconds 1
+} finally {
+    $platformTask.Enabled = $true
+}
 Write-Host "Starting MSX THT Inserter task on ${BindHost}:${Port}"
-Start-PlatformTask `
-    -LocalRepoPath $RepoPath `
-    -LocalPort $Port `
-    -LocalBindHost $BindHost `
-    -LocalPublicUrl $PublicUrl `
-    -LocalTaskName $TaskName
+$platformTask.Run($null) | Out-Null
 
 Wait-HealthCheck -LocalPort $Port
 
 Write-Host "Network URL: $PublicUrl"
-Write-Host "Logs: $(Join-Path $RepoPath "logs\inserter_platform_${Port}.task.log")"
+Write-Host "Lifecycle log: $(Join-Path $RepoPath "logs\inserter_platform_${Port}.lifecycle.log")"
