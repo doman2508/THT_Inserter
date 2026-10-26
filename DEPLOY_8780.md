@@ -46,6 +46,22 @@ wyzwalacz startu systemu z opoznieniem 30 sekund oraz start niezalezny od sesji.
 Konto musi miec prawo **Log on as a batch job**; jezeli polityka domeny go blokuje,
 administrator musi to skorygowac. Nie zmieniamy automatycznie polityk systemu.
 
+Jesli diagnostyka potwierdzila brak tego prawa dla `Remote01`, po osobnej zgodzie
+na jego nadanie mozna uruchomic na serwerze jako administrator:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\grant_platform_batch_logon_8780.ps1
+```
+
+To osobny, jednorazowy krok, nigdy automatyczna czesc deploya. Skrypt sprawdza
+konkretny serwer, zadanie i SID konta `Remote01`, zapisuje poprzednie przypisania
+do `data\deploy-backups\` i przez `LsaAddAccountRights` dodaje tylko
+`SeBatchLogonRight`. Nie zastepuje list praw, nie dodaje konta do Administratorow,
+nie zmienia hasla, nie restartuje aplikacji i nie zmienia odmow logowania.
+Ponowne wykonanie nie dodaje duplikatow. Po kroku administratora wykonaj zwykly
+deploy, aby sprawdzic start z zapisanymi poswiadczeniami. Polityka domenowa moze
+nadpisac lokalne przypisanie; w takim przypadku wymagana jest korekta przez administratora domeny.
+
 Kolejne deploye zachowuja gotowe zadanie i zapisane poswiadczenia, jesli jego
 konfiguracja sie nie zmienila. Zmiana ustawien zadania w tle wymaga ponownego
 podania `-TaskCredential` przez administratora; skrypt zatrzyma sie przed restartem.

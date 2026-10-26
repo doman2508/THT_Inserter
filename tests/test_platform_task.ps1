@@ -6,7 +6,7 @@ function Assert-Equal($Actual, $Expected, $Label) {
     if ($Actual -ne $Expected) { throw "${Label}: expected '$Expected', got '$Actual'" }
 }
 
-foreach ($name in @('deploy_server_8780.ps1', 'deploy_from_local_8780.ps1', 'run_platform_8780.ps1', 'platform_task_8780.ps1', 'diagnose_platform_task_8780.ps1')) {
+foreach ($name in @('deploy_server_8780.ps1', 'deploy_from_local_8780.ps1', 'run_platform_8780.ps1', 'platform_task_8780.ps1', 'diagnose_platform_task_8780.ps1', 'grant_platform_batch_logon_8780.ps1')) {
     $tokens = $null
     $errors = $null
     [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $repo $name), [ref]$tokens, [ref]$errors) | Out-Null
