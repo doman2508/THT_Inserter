@@ -26,6 +26,7 @@ DEFAULT_BOARD_CALIBRATION = {
 }
 OPERATOR_STEP_STATUSES = {"done", "problem", "skipped"}
 OPERATOR_FEEDBACK_STATUSES = {"open", "in_progress", "fixed", "verified", "rejected"}
+STEP_SKIPPED_NOTE = "Pominięte w montażu"
 
 
 def db_path() -> Path:
@@ -1476,9 +1477,9 @@ def mark_step_skipped(project_id: str, step_id: int, reason: str = "") -> dict[s
         note_parts = [
             item.strip()
             for item in str(step["notes"] or "").split("|")
-            if item.strip() and item.strip() != "Pominięte w montażu"
+            if item.strip() and item.strip() != STEP_SKIPPED_NOTE
         ]
-        note_parts.append("Pominięte w montażu")
+        note_parts.append(STEP_SKIPPED_NOTE)
         if reason.strip():
             note_parts.append(reason.strip())
         db.execute(
@@ -1730,7 +1731,7 @@ def unskip_step(project_id: str, step_id: int) -> dict[str, Any] | None:
         note_parts = [
             item.strip()
             for item in str(step["notes"] or "").split("|")
-            if item.strip() and item.strip() != "PominiÄ™te w montaĹĽu"
+            if item.strip() and item.strip() != STEP_SKIPPED_NOTE
         ]
         db.execute(
             """
