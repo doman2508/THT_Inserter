@@ -1177,6 +1177,40 @@ textarea {
     align-items: start;
 }
 
+.manual-point-editor {
+    margin: 12px 0;
+    padding: 16px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #f5f9ff;
+}
+
+.manual-point-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: end;
+}
+
+.manual-point-controls label {
+    display: grid;
+    gap: 6px;
+    min-width: 200px;
+}
+
+.manual-point-editor .manual-point-stage {
+    height: 60vh;
+    min-height: 320px;
+    justify-content: flex-start;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+}
+
+.manual-point-stage .operator-board-source { cursor: crosshair; }
+.manual-point-stage .operator-board-source img { pointer-events: none; }
+.manual-point-stage .calibration-marker { pointer-events: none; }
+.manual-point-stage .manual-draft-marker { background: #7c3aed; }
+
 .calibration-preview {
     min-width: 0;
 }

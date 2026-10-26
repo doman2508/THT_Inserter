@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import mimetypes
 import os
+import re
 import shutil
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -510,6 +511,22 @@ class PlatformHandler(BaseHTTPRequestHandler):
                 return
 
             payload = self.read_json()
+
+            if re.fullmatch(r"/api/projects/[^/]+/points/manual", path):
+                if not isinstance(payload, dict) or "expectedPoint" not in payload:
+                    raise ApiError(400, "Brak stanu punktu z edytora.")
+                try:
+                    project = db.save_manual_point(
+                        path.split("/")[3], designator=str(payload.get("designator") or ""),
+                        x=payload.get("x"), y=payload.get("y"),
+                        expected_context=payload.get("expectedContext"), expected_point=payload["expectedPoint"],
+                    )
+                except ValueError as error:
+                    raise ApiError(400, str(error)) from error
+                if project is None:
+                    raise ApiError(404, "Project not found")
+                self.send_json(200, {"project": project})
+                return
 
             if path.startswith("/api/projects/") and path.endswith("/steps/merge"):
                 project_id = path.split("/")[3]

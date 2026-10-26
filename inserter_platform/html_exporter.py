@@ -78,7 +78,7 @@ def _display_quantity_for_step(step: dict[str, Any]) -> str:
 def _board_base_metrics(project: dict[str, Any], points: list[dict[str, Any]]) -> dict[str, Any]:
     project_width = float(project.get("board_width") or 0)
     project_height = float(project.get("board_height") or 0)
-    metric_points = project.get("points") or points
+    metric_points = [point for point in (project.get("points") or points) if point.get("source") != "manual"]
     coordinates = [
         {"x": float(point.get("x") or 0), "y": float(point.get("y") or 0)}
         for point in metric_points
@@ -231,6 +231,7 @@ def _export_component_points(project: dict[str, Any], used_designators: set[str]
                 "X": calibrated_x * display_width,
                 "Y": (1 - calibrated_y) * display_height,
                 "Rotacja": point.get("rotation"),
+                "Source": point.get("source") or "pp",
             }
         )
 
@@ -398,11 +399,15 @@ def render_project_html(project: dict[str, Any]) -> tuple[str, str]:
 
     table_data: list[dict[str, Any]] = []
     used_designators: set[str] = set()
+    manual_designators = {point["designator"] for point in project.get("points") or [] if point.get("source") == "manual"}
     for index, step in enumerate(project.get("steps") or [], start=1):
         point_designators = _point_designators_for_step(step)
         used_designators.update(point_designators)
         origin_notes = db.unit_origin_notes(step)
         notes = [part.strip() for part in db.note_without_segments(str(step.get("notes") or "")).split("|") if part.strip()]
+        manual_names = [name for name in point_designators if name in manual_designators]
+        if manual_names:
+            notes.append("Punkty dodane ręcznie: " + ", ".join(manual_names))
         table_data.append(
             {
                 "Lp.": index,

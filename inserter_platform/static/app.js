@@ -17,6 +17,7 @@ const state = {
   calibrationDesignators: new Map(),
   calibrationDrafts: new Map(),
   polarityEditDesignator: null,
+  manualPointDraft: null,
   operatorView: loadOperatorViewState(),
   pinIndexes: [],
 };
@@ -869,6 +870,7 @@ function renderProjectDetails() {
   attachGerberContourTools();
   attachCalibrationTools();
   attachPolarityTools();
+  attachManualPointTools();
   attachAdminPreviewTools();
   els.projectDetails.querySelectorAll("[data-feedback-form]").forEach((form) => {
     form.addEventListener("submit", (event) => {
@@ -2655,13 +2657,186 @@ function attachAdminPreviewTools() {
   scheduleAdminPreviewCenter();
 }
 
+function manualPointContext(project) {
+  return {
+    image: project.board_image_path, width: project.board_width, height: project.board_height,
+    projectUpdatedAt: project.updated_at,
+    calibration: project.board_calibration || {}, profile: project.board_contours?.profile || {},
+    referencePoints: (project.points || []).filter((point) => point.source !== "manual")
+      .map(({ id, designator, x, y }) => ({ id, designator, x, y })),
+  };
+}
+
+function manualPointCandidates(project) {
+  const points = new Map((project.points || []).map((point) => [point.designator, point]));
+  const names = new Set((project.steps || []).flatMap(stepDesignatorsForPoints));
+  return sortDesignators([...names].filter((name) => !points.has(name) || points.get(name).source === "manual"));
+}
+
+function newManualPointDraft(project, designator = "", zoom = 100) {
+  const current = (project.points || []).find((point) => point.designator === designator);
+  return {
+    projectId: project.id, designator, zoom, point: null, saving: false, message: "",
+    expectedContext: manualPointContext(project),
+    expectedPoint: current ? { id: current.id, x: current.x, y: current.y } : null,
+  };
+}
+
+function renderManualPointEditor(project) {
+  if (state.manualPointDraft?.projectId !== project.id) state.manualPointDraft = newManualPointDraft(project);
+  const draft = state.manualPointDraft;
+  const candidates = manualPointCandidates(project);
+  const known = new Map((project.points || []).map((point) => [point.designator, point]));
+  const profile = project.board_contours?.profile || {};
+  const hasFrame = (Number(project.board_width) > 0 && Number(project.board_height) > 0)
+    || (profile.fromProfile && Number(profile.width) > 0 && Number(profile.height) > 0)
+    || (project.points || []).some((point) => point.source !== "manual");
+  const canPlace = Boolean(project.board_image_path && hasFrame);
+  return `
+    <section class="manual-point-editor" data-manual-point-editor>
+      <h3>Wskaż punkt na PCB</h3>
+      <p>Wybierz oznaczenie, kliknij miejsce montażu i sprawdź znacznik. Dopiero „Zapisz punkt” zapisuje położenie. Najpierw sprawdź dopasowanie istniejących punktów w zakładce Kalibracja.</p>
+      <div class="manual-point-controls">
+        <label>Desygnator
+          <select data-manual-point-designator ${canPlace && !draft.saving ? "" : "disabled"}>
+            <option value="">Wybierz oznaczenie…</option>
+            ${candidates.map((name) => `<option value="${escapeHtml(name)}" ${name === draft.designator ? "selected" : ""}>${escapeHtml(name)} — ${known.has(name) ? "popraw punkt ręczny" : "brak punktu"}</option>`).join("")}
+          </select>
+        </label>
+        <label>Powiększenie <span data-manual-zoom-label>${draft.zoom}%</span>
+          <input type="range" min="100" max="240" step="10" value="${draft.zoom}" data-manual-point-zoom>
+        </label>
+        <button type="button" class="primary" data-manual-point-save disabled>Zapisz punkt</button>
+        <button type="button" data-manual-point-cancel ${draft.saving ? "disabled" : ""}>Anuluj wskazanie</button>
+      </div>
+      <p role="status" aria-live="polite" data-manual-point-status>${escapeHtml(draft.message || "Kliknięcie nie zapisuje danych automatycznie.")}</p>
+      ${!project.board_image_path ? '<p>Najpierw dodaj obraz PCB przyciskiem „Dodaj PCB”.</p>' : !hasFrame ? '<p>Najpierw ustaw wymiary PCB lub zaimportuj punkty odniesienia P&amp;P.</p>' : `
+        <div data-manual-point-board>
+          ${renderBoardMap(project, project.points || [], {
+            selectedDesignators: ["__MANUAL_DRAFT__"], showSoftPoints: true,
+            markerClass: "calibration-marker", stageClass: "manual-point-stage", zoomPercent: draft.zoom,
+          })}
+        </div>`}
+      <p class="muted">Punkt wskazuje miejsce montażu, nie przebieg połączenia. Nie zmienia statusu „Pominięte w montażu”. Punkty z importu P&amp;P są chronione przed nadpisaniem.</p>
+    </section>`;
+}
+
+function manualCoordinatesFromClick(event, project) {
+  const rect = event.currentTarget.getBoundingClientRect();
+  if (!(rect.width > 0 && rect.height > 0)) throw new Error("Obraz PCB nie jest jeszcze gotowy.");
+  const metrics = boardMapMetrics(project, project.points || []);
+  const base = invertBoardCalibrationFromNormalizedPoint({
+    x: (event.clientX - rect.left) / rect.width, y: (event.clientY - rect.top) / rect.height,
+  }, metrics.calibration, false);
+  if (base.x < -1e-9 || base.x > 1 + 1e-9 || base.y < -1e-9 || base.y > 1 + 1e-9) {
+    throw new Error("To miejsce jest poza skalibrowanym obszarem PCB. Sprawdź kalibrację lub wskaż miejsce wewnątrz płytki.");
+  }
+  return {
+    x: metrics.originX + Math.max(0, Math.min(1, base.x)) * metrics.width,
+    y: metrics.originY + (1 - Math.max(0, Math.min(1, base.y))) * metrics.height,
+  };
+}
+
+function updateManualPointPreview() {
+  const root = els.projectDetails.querySelector("[data-manual-point-editor]");
+  const draft = state.manualPointDraft;
+  if (!root || !draft || draft.projectId !== state.selectedProject?.id) return;
+  root.querySelector("[data-manual-draft-marker]")?.remove();
+  const point = draft.point || draft.expectedPoint;
+  const source = root.querySelector(".operator-board-source");
+  if (point && source) {
+    const position = boardPointPosition(point, boardMapMetrics(state.selectedProject, state.selectedProject.points));
+    const marker = document.createElement("span");
+    marker.className = "calibration-marker active manual-draft-marker";
+    marker.dataset.manualDraftMarker = "";
+    marker.style.left = `${position.x}%`;
+    marker.style.top = `${position.y}%`;
+    const label = document.createElement("span");
+    label.textContent = `${draft.designator}${draft.point ? " — podgląd" : " — zapisany"}`;
+    marker.append(label);
+    source.append(marker);
+  }
+  root.querySelector("[data-manual-point-save]").disabled = !draft.point || draft.saving;
+  root.querySelector("[data-manual-point-status]").textContent = draft.message || (draft.point
+    ? `Podgląd ${draft.designator}: X=${draft.point.x.toFixed(3)}, Y=${draft.point.y.toFixed(3)} mm. Sprawdź miejsce i zapisz punkt.`
+    : draft.designator ? `Wskaż miejsce dla ${draft.designator}.` : "Wybierz oznaczenie, a następnie kliknij obraz płytki.");
+}
+
+function attachManualPointTools() {
+  if (!state.selectedProject || state.activeProjectTab !== "points") return;
+  const root = els.projectDetails.querySelector("[data-manual-point-editor]");
+  if (!root) return;
+  const project = state.selectedProject;
+  root.querySelector("[data-manual-point-designator]").addEventListener("change", (event) => {
+    state.manualPointDraft = newManualPointDraft(project, event.target.value, state.manualPointDraft.zoom);
+    updateManualPointPreview();
+  });
+  root.querySelector("[data-manual-point-cancel]").addEventListener("click", () => {
+    if (state.manualPointDraft.saving) return;
+    state.manualPointDraft = newManualPointDraft(project, state.manualPointDraft.designator, state.manualPointDraft.zoom);
+    updateManualPointPreview();
+  });
+  root.querySelector("[data-manual-point-zoom]").addEventListener("input", (event) => {
+    const zoom = Number(event.target.value);
+    state.manualPointDraft.zoom = zoom;
+    const map = root.querySelector(".operator-board-map");
+    if (map) map.style.width = `${zoom}%`;
+    root.querySelector("[data-manual-zoom-label]").textContent = `${zoom}%`;
+  });
+  root.querySelector(".operator-board-source")?.addEventListener("click", (event) => {
+    const draft = state.manualPointDraft;
+    if (draft.saving) return;
+    try {
+      if (!draft.designator) throw new Error("Najpierw wybierz oznaczenie.");
+      const image = event.currentTarget.querySelector("img");
+      if (!image.complete || !image.naturalWidth) throw new Error("Poczekaj na załadowanie obrazu PCB.");
+      draft.point = manualCoordinatesFromClick(event, project);
+      draft.message = "";
+    } catch (error) {
+      draft.point = null;
+      draft.message = error.message;
+    }
+    updateManualPointPreview();
+  });
+  root.querySelector("[data-manual-point-save]").addEventListener("click", async () => {
+    const draft = state.manualPointDraft;
+    if (!draft.point || draft.saving) return;
+    draft.saving = true;
+    draft.message = "Zapisywanie punktu…";
+    root.querySelector("[data-manual-point-designator]").disabled = true;
+    root.querySelector("[data-manual-point-cancel]").disabled = true;
+    updateManualPointPreview();
+    try {
+      const response = await api(`/api/projects/${project.id}/points/manual`, {
+        method: "POST", body: JSON.stringify({ designator: draft.designator, ...draft.point,
+          expectedContext: draft.expectedContext, expectedPoint: draft.expectedPoint }),
+      });
+      if (state.selectedProject?.id === project.id) {
+        state.selectedProject = response.project;
+        state.manualPointDraft = newManualPointDraft(response.project, draft.designator, draft.zoom);
+        state.manualPointDraft.message = `Zapisano ${draft.designator} — punkt dodany ręcznie.`;
+        renderProjectDetails();
+        renderOperatorSteps();
+      }
+    } catch (error) {
+      draft.message = `Nie zapisano: ${error.message}`;
+    } finally {
+      draft.saving = false;
+      root.querySelector("[data-manual-point-designator]").disabled = false;
+      root.querySelector("[data-manual-point-cancel]").disabled = false;
+      updateManualPointPreview();
+    }
+  });
+  updateManualPointPreview();
+}
+
 function renderPointsTab(project) {
   const missing = missingPointDesignators(project);
   const missingPanel = missing.length ? `
     <div class="summary-box">
       <strong>Linie bez punktu P&amp;P</strong>
       <span>${escapeHtml(shortList(missing, 30))}</span>
-      <span>Wgraj aktualny P&amp;P przez akcj\u0119 "Uzupe\u0142nij punkty P&amp;P", aby dopi\u0105\u0107 brakuj\u0105ce markery bez ruszania linii monta\u017cowych.</span>
+      <span>Wskaż punkt ręcznie na obrazie poniżej albo użyj „Uzupełnij P&amp;P”. Linie montażowe pozostaną zachowane.</span>
     </div>
   ` : "";
   const rows = (project.points || [])
@@ -2671,12 +2846,14 @@ function renderPointsTab(project) {
         <td class="num">${formatNumber(point.x)}</td>
         <td class="num">${formatNumber(point.y)}</td>
         <td class="num">${point.rotation ?? ""}</td>
+        <td>${point.source === "manual" ? "Dodany ręcznie" : "P&P"}</td>
       </tr>
     `)
     .join("");
 
   return `
     ${missingPanel}
+    ${renderManualPointEditor(project)}
     <div class="table-wrap">
       <table class="admin-table points-table">
         <thead>
@@ -2685,10 +2862,11 @@ function renderPointsTab(project) {
             <th>X</th>
             <th>Y</th>
             <th>Rotacja</th>
+            <th>Źródło</th>
           </tr>
         </thead>
         <tbody>
-          ${rows || '<tr><td colspan="4" class="muted">Brak punktów P&amp;P.</td></tr>'}
+          ${rows || '<tr><td colspan="5" class="muted">Brak punktów P&amp;P.</td></tr>'}
         </tbody>
       </table>
     </div>
@@ -3555,7 +3733,7 @@ function activeBoardCalibration(project) {
 function boardBaseMetrics(project, points) {
   const projectWidth = Number(project.board_width) || 0;
   const projectHeight = Number(project.board_height) || 0;
-  const metricPoints = project.points?.length ? project.points : (points || []);
+  const metricPoints = (project.points?.length ? project.points : (points || [])).filter((point) => point.source !== "manual");
   const pointCoordinates = metricPoints
     .map((point) => ({
       x: Number(point.x),
@@ -3703,7 +3881,7 @@ function applyBoardCalibrationToNormalizedPoint(point, calibration) {
   };
 }
 
-function invertBoardCalibrationFromNormalizedPoint(point, calibration) {
+function invertBoardCalibrationFromNormalizedPoint(point, calibration, clamp = true) {
   let x = Math.max(0, Math.min(1, Number(point.x) || 0));
   let y = Math.max(0, Math.min(1, Number(point.y) || 0));
   const cleanCalibration = normalizeBoardCalibration(calibration);
@@ -3727,8 +3905,8 @@ function invertBoardCalibrationFromNormalizedPoint(point, calibration) {
   }
 
   return {
-    x: Math.max(0, Math.min(1, x)),
-    y: Math.max(0, Math.min(1, y)),
+    x: clamp ? Math.max(0, Math.min(1, x)) : x,
+    y: clamp ? Math.max(0, Math.min(1, y)) : y,
   };
 }
 
@@ -4042,6 +4220,7 @@ function renderOperatorBoard(project, step) {
       })}
       <div class="operator-board-meta">
         <span>${activePoints.length ? `Punkty: ${activePoints.map((point) => point.designator).join(", ")}` : "Brak punktu P&P dla tej linii"}</span>
+        ${activePoints.some((point) => point.source === "manual") ? `<span>Punkty dodane ręcznie: ${escapeHtml(activePoints.filter((point) => point.source === "manual").map((point) => point.designator).join(", "))}</span>` : ""}
         ${board.swapped ? '<span>Wykryto zamienione wymiary PCB: podgląd używa osi P&amp;P.</span>' : ""}
         ${calibration.rotation || calibration.flipX || calibration.flipY ? '<span>Kalibracja PCB aktywna.</span>' : ""}
         ${missing.length ? `<span>Bez punktu: ${escapeHtml(missing.join(", "))}</span>` : ""}

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import json
+import math
 import re
 import sqlite3
 import uuid
@@ -148,6 +149,7 @@ def init_db() -> None:
                 x REAL NOT NULL,
                 y REAL NOT NULL,
                 rotation REAL,
+                source TEXT NOT NULL DEFAULT 'pp',
                 created_at TEXT NOT NULL,
                 FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE,
                 UNIQUE(project_id, designator)
@@ -229,6 +231,9 @@ def init_db() -> None:
         step_columns = {row["name"] for row in db.execute("PRAGMA table_info(placement_steps)").fetchall()}
         if "segments_json" not in step_columns:
             db.execute("ALTER TABLE placement_steps ADD COLUMN segments_json TEXT NOT NULL DEFAULT ''")
+        point_columns = {row["name"] for row in db.execute("PRAGMA table_info(component_points)").fetchall()}
+        if "source" not in point_columns:
+            db.execute("ALTER TABLE component_points ADD COLUMN source TEXT NOT NULL DEFAULT 'pp'")
         timestamp = now_iso()
         db.executemany(
             """
@@ -1408,6 +1413,87 @@ def supplement_project_points(
         )
         db.execute("UPDATE projects SET updated_at = ? WHERE id = ?", (timestamp, project_id))
     return get_project(project_id), full_summary
+
+
+def manual_point_context(project: dict[str, Any]) -> dict[str, Any]:
+    """Geometry snapshot: manual markers must not change the inferred PCB frame."""
+    return {
+        "image": project.get("board_image_path"),
+        "projectUpdatedAt": project.get("updated_at"),
+        "width": project.get("board_width"),
+        "height": project.get("board_height"),
+        "calibration": project.get("board_calibration") or {},
+        "profile": (project.get("board_contours") or {}).get("profile") or {},
+        "referencePoints": [
+            {key: point[key] for key in ("id", "designator", "x", "y")}
+            for point in project.get("points") or [] if point.get("source") != "manual"
+        ],
+    }
+
+
+def save_manual_point(project_id: str, *, designator: str, x: Any, y: Any,
+                      expected_context: Any, expected_point: Any) -> dict[str, Any] | None:
+    # Use the same frame as HTML export; import locally to avoid a module cycle.
+    from .html_exporter import _board_base_metrics
+
+    if any(isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value)
+           for value in (x, y)):
+        raise ValueError("Współrzędne punktu muszą być skończonymi liczbami.")
+    designator = designator.strip().upper()
+    timestamp = now_iso()
+    with connect() as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        project = project_row_to_dict(connection.execute("SELECT * FROM projects WHERE id = ?", (project_id,)).fetchone())
+        if project is None:
+            return None
+        project["points"] = [dict(row) for row in connection.execute(
+            "SELECT * FROM component_points WHERE project_id = ? ORDER BY designator", (project_id,))]
+        if not project.get("board_image_path"):
+            raise ValueError("Najpierw dodaj obraz PCB.")
+        if expected_context != manual_point_context(project):
+            raise ValueError("Obraz, kalibracja lub punkty odniesienia zmieniły się. Odśwież projekt i wskaż punkt ponownie.")
+        steps = connection.execute("SELECT * FROM placement_steps WHERE project_id = ? ORDER BY step_no,id", (project_id,)).fetchall()
+        affected = [step for step in steps if designator in split_designators(step["designators"])]
+        if not designator or not affected:
+            raise ValueError("Wybierz desygnator istniejący w liniach montażowych tego projektu.")
+        current = next((point for point in project["points"] if point["designator"] == designator), None)
+        if current and current.get("source") != "manual":
+            raise ValueError("Nie można nadpisać punktu pochodzącego z importu P&P.")
+        actual = {key: current[key] for key in ("id", "x", "y")} if current else None
+        if actual != expected_point:
+            raise ValueError("Ten punkt zmienił się od otwarcia edytora. Odśwież projekt.")
+        metrics = _board_base_metrics(project, project["points"])
+        profile = project["board_contours"].get("profile") or {}
+        has_frame = ((project.get("board_width") or 0) > 0 and (project.get("board_height") or 0) > 0)
+        has_frame = has_frame or (profile.get("fromProfile") and (profile.get("width") or 0) > 0 and (profile.get("height") or 0) > 0)
+        if not has_frame and not any(point.get("source") != "manual" for point in project["points"]):
+            raise ValueError("Najpierw ustaw wymiary PCB lub zaimportuj punkty odniesienia P&P.")
+        if not (metrics["originX"] <= x <= metrics["originX"] + metrics["width"]
+                and metrics["originY"] <= y <= metrics["originY"] + metrics["height"]):
+            raise ValueError("Punkt znajduje się poza obszarem PCB.")
+        if current:
+            connection.execute("UPDATE component_points SET x = ?, y = ? WHERE id = ?", (x, y, current["id"]))
+        else:
+            connection.execute(
+                """INSERT INTO component_points (project_id,designator,x,y,rotation,source,created_at)
+                   VALUES (?, ?, ?, ?, NULL, 'manual', ?)""", (project_id, designator, x, y, timestamp))
+        available = {point["designator"] for point in project["points"]} | {designator}
+        for step in affected:
+            remaining = [name for name in split_designators(step["designators"]) if name not in available]
+            parts = []
+            for part in str(step["notes"] or "").split("|"):
+                if part.strip().startswith("Brak punktu P&P:"):
+                    if remaining:
+                        parts.append("Brak punktu P&P: " + ", ".join(remaining))
+                elif part.strip():
+                    parts.append(part.strip())
+            notes = " | ".join(parts)
+            if notes != step["notes"]:
+                connection.execute("UPDATE placement_steps SET notes = ?, updated_at = ? WHERE id = ?", (notes, timestamp, step["id"]))
+        append_project_change(connection, project_id, "manual_point",
+                              f"{'Poprawiono' if current else 'Dodano'} punkt ręcznie: {designator} (X={x:.4f}, Y={y:.4f}).", timestamp)
+        connection.execute("UPDATE projects SET updated_at = ? WHERE id = ?", (timestamp, project_id))
+    return get_project(project_id)
 
 
 def create_step(
