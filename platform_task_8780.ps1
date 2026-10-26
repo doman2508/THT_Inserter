@@ -165,18 +165,15 @@ function Start-PlatformTaskChecked {
     if (-not $Task.Enabled -or -not $Task.Definition.Settings.AllowDemandStart) {
         throw 'Task is disabled or disallows on-demand start; existing app was not stopped.'
     }
-    # Run() can succeed even when no process starts. Check the returned instance,
-    # not the stale LastTaskResult, and do this BEFORE stopping the existing app.
-    # An already-running instance cannot validate newly stored credentials.
-    $instance = $Task.Run($null)
+    # Run() can succeed even when nothing starts. Check the task's live state,
+    # not stale LastTaskResult. IgnoreNew can discard the returned instance;
+    # GetInstances/EnginePID can also be hidden from a different logon context.
+    # The caller must additionally check HTTP health. A running instance cannot
+    # validate stored credentials for the next launch.
+    $Task.Run($null) | Out-Null
     $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
     do {
-        try {
-            $instance.Refresh()
-            if ($instance.State -eq 4 -and $instance.EnginePID -gt 0) { return }
-        } catch {
-            if ($_.Exception.GetBaseException().HResult -eq -2147024891) { throw }
-        }
+        if ($Task.State -eq 4) { return }
         if ([DateTime]::UtcNow -ge $deadline) { break }
         Start-Sleep -Milliseconds 250
     } while ($true)

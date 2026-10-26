@@ -125,10 +125,10 @@ Wait-HealthCheck -LocalPort $Port
 $platformTask.Enabled = $false
 try {
     $platformTask.Stop(0)
-    for ($i = 0; $i -lt 20 -and $platformTask.GetInstances(0).Count -gt 0; $i++) {
+    for ($i = 0; $i -lt 20 -and $platformTask.State -in @(2, 4); $i++) {
         Start-Sleep -Milliseconds 250
     }
-    if ($platformTask.GetInstances(0).Count -gt 0) { throw 'Previous task instance did not stop.' }
+    if ($platformTask.State -in @(2, 4)) { throw 'Previous task instance did not stop.' }
     Stop-PortListener -LocalPort $Port
     Start-Sleep -Seconds 1
 } finally {

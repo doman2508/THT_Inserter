@@ -23,7 +23,7 @@ function New-FakeTask([string]$Sddl) {
         Name = 'MSX THT Inserter 8780'; Path = '\MSX THT Inserter 8780'
         Sddl = $Sddl; Enabled = $true; SetCount = 0; RunCount = 0; ReadCount = 0
         IgnoreWrite = $false; ConcurrentChange = $false; LastTaskResult = 267014
-        InstanceState = 4; InstancePid = 123; RefreshFailure = $false
+        State = 4
         Definition = [pscustomobject]@{Settings = [pscustomobject]@{MultipleInstances = 2; AllowDemandStart = $true}}
     }
     $task | Add-Member ScriptMethod GetSecurityDescriptor {
@@ -48,8 +48,9 @@ function New-FakeTask([string]$Sddl) {
     $task | Add-Member ScriptMethod Run {
         param($Parameters)
         $this.RunCount++
-        $instance = [pscustomobject]@{State=$this.InstanceState; EnginePID=$this.InstancePid; Fail=$this.RefreshFailure}
-        $instance | Add-Member ScriptMethod Refresh { if ($this.Fail) { throw 'Instance no longer exists' } }
+        # IgnoreNew can return a discarded instance even though the task runs.
+        $instance = [pscustomobject]@{State=$null; EnginePID=$null}
+        $instance | Add-Member ScriptMethod Refresh { throw 'Instance no longer exists' }
         return $instance
     }
     return $task
@@ -111,14 +112,12 @@ try {
 
     $task = New-FakeTask $repair.Dacl
     Start-PlatformTaskChecked -Task $task -TimeoutSeconds 0
-    Assert-Equal $task.RunCount 1 'Start succeeds with real running instance'
-    $task.InstanceState = 3
+    Assert-Equal $task.RunCount 1 'Existing running task survives IgnoreNew/discarded instance'
+    $task.State = 3
     Assert-Throws { Start-PlatformTaskChecked -Task $task -TimeoutSeconds 0 } '*accepted start but has no running process*'
-    $task.InstanceState = 4
-    $task.InstancePid = 0
+    $task.State = 2
     Assert-Throws { Start-PlatformTaskChecked -Task $task -TimeoutSeconds 0 } '*accepted start but has no running process*'
-    $task.RefreshFailure = $true
-    Assert-Throws { Start-PlatformTaskChecked -Task $task -TimeoutSeconds 0 } '*accepted start but has no running process*'
+    $task.State = 4
     $task.Enabled = $false
     $previousRuns = $task.RunCount
     Assert-Throws { Start-PlatformTaskChecked -Task $task -TimeoutSeconds 0 } '*disabled*'
