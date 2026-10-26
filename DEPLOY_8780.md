@@ -55,6 +55,17 @@ gdy XML zadania sie nie zmienil. Haslo nie trafia do logow ani kopii definicji.
 
 ### Start przyjety, ale proces nie powstaje
 
+Odczyt diagnostyczny w PowerShellu administratora (bez zatrzymania aplikacji,
+proby logowania, zmiany uprawnien lub wlaczania historii):
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\diagnose_platform_task_8780.ps1
+```
+
+Skrypt odczytuje bezposrednio z LSA przypisania `SeBatchLogonRight` oraz
+`SeDenyBatchLogonRight`, konto zadania i jego grupy lokalne, stan historii i HTTP.
+Rozroznia brak przypisan od odmowy dostepu. Nie odczytuje hasel ani sekretow.
+
 Skrypt czeka do 15 sekund na dzialajace wystapienie zadania. W razie niepowodzenia
 sprawdz jako administrator dziennik `Microsoft-Windows-TaskScheduler/Operational`
 dla `\MSX THT Inserter 8780`, zapisane poswiadczenia oraz prawo logowania wsadowego.
