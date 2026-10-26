@@ -626,6 +626,24 @@ class PlatformHandler(BaseHTTPRequestHandler):
                 self.send_json(200, {"project": project})
                 return
 
+            if path.startswith("/api/projects/") and path.endswith("/reorder-units"):
+                parts = path.split("/")
+                if len(parts) != 7 or parts[4] != "steps":
+                    raise ApiError(404, "Not found")
+                try:
+                    project = db.reorder_step_units(
+                        project_id=parts[3],
+                        step_id=parse_int(parts[5]),
+                        unit_order=payload.get("unitOrder"),
+                        expected_units=payload.get("expectedUnits"),
+                    )
+                except ValueError as error:
+                    raise ApiError(400, str(error)) from error
+                if project is None:
+                    raise ApiError(404, "Step not found")
+                self.send_json(200, {"project": project})
+                return
+
             if path.startswith("/api/projects/") and path.endswith("/reorder"):
                 parts = path.split("/")
                 project_id = parts[3]

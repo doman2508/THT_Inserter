@@ -810,6 +810,71 @@ textarea {
     gap: 10px;
 }
 
+.pro-order-editor {
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 10px;
+    background: #fff;
+}
+
+.pro-order-editor summary {
+    cursor: pointer;
+    font-weight: 700;
+}
+
+.pro-order-editor p {
+    color: var(--muted);
+    font-size: 13px;
+    margin: 10px 0;
+}
+
+.pro-order-editor fieldset {
+    border: 0;
+    padding: 0;
+    margin: 0;
+    min-width: 0;
+}
+
+.pro-order-editor legend {
+    font-size: 13px;
+    padding: 0 0 8px;
+}
+
+.pro-order-list {
+    display: grid;
+    gap: 5px;
+    list-style: none;
+    padding: 2px;
+    margin: 0 0 10px;
+    max-height: 320px;
+    overflow-y: auto;
+}
+
+.pro-order-list li {
+    display: grid;
+    grid-template-columns: 3ch minmax(0, 1fr) auto auto;
+    gap: 6px;
+    align-items: center;
+    padding: 5px 8px;
+    border: 1px solid var(--line);
+    border-radius: 5px;
+}
+
+.pro-order-position {
+    color: var(--muted);
+    text-align: right;
+}
+
+.pro-order-label {
+    overflow-wrap: anywhere;
+}
+
+.pro-order-list button {
+    min-width: 36px;
+    min-height: 36px;
+    padding: 4px 8px;
+}
+
 .pro-unit-list {
     display: flex;
     flex-wrap: wrap;

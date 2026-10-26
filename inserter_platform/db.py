@@ -1630,6 +1630,65 @@ def update_step_details(
     return get_project(project_id)
 
 
+def reorder_step_units(
+    project_id: str,
+    step_id: int,
+    unit_order: list[Any],
+    expected_units: list[Any],
+) -> dict[str, Any] | None:
+    if not isinstance(unit_order, list) or not unit_order or any(type(index) is not int for index in unit_order):
+        raise ValueError("Podaj kolejność wszystkich sztuk/odcinków.")
+    if not isinstance(expected_units, list):
+        raise ValueError("Brak pierwotnej kolejności. Odśwież widok i spróbuj ponownie.")
+
+    timestamp = now_iso()
+    with connect() as db:
+        # Read and update under one write lock: indices must refer to the same snapshot.
+        db.execute("BEGIN IMMEDIATE")
+        step = db.execute(
+            "SELECT * FROM placement_steps WHERE project_id = ? AND id = ?",
+            (project_id, step_id),
+        ).fetchone()
+        if step is None:
+            return None
+        units = step_units_from_row(step)
+        if expected_units != [unit["designators"] for unit in units]:
+            raise ValueError("Zawartość lub kolejność linii zmieniła się. Odśwież widok i spróbuj ponownie.")
+        if sorted(unit_order) != list(range(len(units))):
+            raise ValueError("Kolejność musi zawierać każdą sztukę/odcinek dokładnie raz.")
+
+        if unit_order != list(range(len(units))):
+            ordered_units = [units[index] for index in unit_order]
+            designators = ",".join(item for unit in ordered_units for item in unit["designators"])
+            segments_json = step["segments_json"]
+            notes = step["notes"]
+            if step_segments_from_row(step):
+                try:
+                    stored_segments = json.loads(segments_json or "null")
+                except (ValueError, TypeError):
+                    stored_segments = None
+                if isinstance(stored_segments, list) and len(stored_segments) == len(units):
+                    # Keep all original segment metadata, including fields unknown to this editor.
+                    segments_json = json.dumps([stored_segments[index] for index in unit_order], ensure_ascii=False)
+                else:
+                    # Older projects store the segment order in notes, not in JSON.
+                    segments_json = json.dumps(ordered_units, ensure_ascii=False)
+                notes = note_without_segments(str(notes or ""))
+            db.execute(
+                """UPDATE placement_steps
+                   SET designators = ?, segments_json = ?, notes = ?, updated_at = ?
+                   WHERE project_id = ? AND id = ?""",
+                (designators, segments_json, notes, timestamp, project_id, step_id),
+            )
+            append_project_change(
+                db, project_id, "step_units_reorder",
+                f"Zmieniono kolejność sztuk/odcinków w linii {step['step_no']}: {designators}.",
+                timestamp,
+            )
+            db.execute("UPDATE projects SET updated_at = ? WHERE id = ?", (timestamp, project_id))
+    return get_project(project_id)
+
+
 def reorder_step(project_id: str, step_id: int, direction: str) -> dict[str, Any] | None:
     clean_direction = (direction or "").strip().lower()
     if clean_direction not in {"up", "down"}:

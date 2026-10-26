@@ -76,6 +76,18 @@ Edytuj projekt | Dodaj/Podmień PCB | Reimport Exceli
 
 `Reimport Exceli` zastepuje aktualne linie montazowe i punkty P&P wybranego projektu nowym importem. Obraz PCB zostaje zachowany, chyba ze przy reimporcie zostanie wskazany nowy plik obrazu.
 
+## Kolejność elementów wewnątrz linii
+
+W zakładce `Linie montażowe` otwórz `PRO` przy wybranej linii (kolumna `Akcje` po prawej),
+rozwiń `Zmień kolejność elementów`, ustaw pozycje strzałkami `↑ / ↓` i kliknij `Zapisz kolejność`.
+Przycisk `Cofnij zmiany kolejności` przywraca zapisany układ przed zapisaniem.
+
+W zwykłej linii każdy desygnator, np. `RP.B5.1`, jest przestawiany osobno.
+Przygotowane odcinki, np. `TP20+TP21+TP22`, są przesuwane w całości, bez zmiany ilości,
+liczby pinów ani indeksów materiałowych. Kolejność obowiązuje także w widoku Operatora
+po odświeżeniu i w nowo generowanym HTML; wcześniej pobrane pliki trzeba wygenerować ponownie.
+Strzałki w kolumnie `Akcje` nadal przesuwają całe linie montażowe.
+
 ## Przygotowanie produkcji
 
 Zakladka `Przygotowanie` wykrywa linie, ktore wygladaja jak listwy, piny albo zlacza wymagajace decyzji technologicznej. Rozbicie odbywa sie na poziomie fizycznych odcinkow listwy, a nie pojedynczych otworow PCB.

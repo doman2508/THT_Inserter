@@ -1681,6 +1681,7 @@ function attachLineProTools() {
       runProAction(() => saveProStepDetails(form));
     });
   });
+  els.projectDetails.querySelectorAll("[data-pro-order-form]").forEach(attachProOrderForm);
   els.projectDetails.querySelectorAll("[data-pro-split-units]").forEach((button) => {
     button.addEventListener("click", () => runProAction(() => splitProUnits(button.dataset.proSplitUnits)));
   });
@@ -1714,6 +1715,89 @@ function attachLineProTools() {
   });
   deleteButton?.addEventListener("click", () => runProAction(() => deleteProDesignators(deleteButton)));
   updateDeleteButton();
+}
+
+function updateProOrderForm(form) {
+  const rows = Array.from(form.querySelectorAll("[data-order-unit]"));
+  const changed = rows.some((row, index) => Number(row.dataset.orderUnit) !== index);
+  rows.forEach((row, index) => {
+    row.querySelector("[data-order-position]").textContent = `${index + 1}.`;
+    row.querySelector('[data-order-direction="up"]').disabled = index === 0;
+    row.querySelector('[data-order-direction="down"]').disabled = index === rows.length - 1;
+  });
+  form.querySelector("[data-save-order]").disabled = !changed;
+  form.querySelector("[data-reset-order]").disabled = !changed;
+  form.querySelector("[data-order-status]").textContent = changed ? "Kolejność zmieniona — zapisz zmiany." : "Kolejność zgodna z zapisem.";
+}
+
+function moveProOrderRow(button) {
+  const form = button.closest("[data-pro-order-form]");
+  const row = button.closest("[data-order-unit]");
+  const list = row.parentElement;
+  if (button.dataset.orderDirection === "up" && row.previousElementSibling) {
+    list.insertBefore(row, row.previousElementSibling);
+  } else if (button.dataset.orderDirection === "down" && row.nextElementSibling) {
+    list.insertBefore(row.nextElementSibling, row);
+  }
+  updateProOrderForm(form);
+  // Moving DOM nodes may drop keyboard focus; at a boundary use the other arrow.
+  const focusButton = button.disabled ? row.querySelector("[data-order-direction]:not(:disabled)") : button;
+  focusButton?.focus({ preventScroll: true });
+  row.scrollIntoView({ block: "nearest" });
+}
+
+function attachProOrderForm(form) {
+  const projectId = state.selectedProject.id;
+  const stepId = Number(form.dataset.stepId);
+  const step = state.selectedProject.steps.find((item) => Number(item.id) === stepId);
+  const expectedUnits = stepUnitsForPro(step).map((unit) => unit.designators);
+  form.querySelectorAll("[data-order-direction]").forEach((button) => {
+    button.addEventListener("click", () => moveProOrderRow(button));
+  });
+  form.querySelector("[data-reset-order]").addEventListener("click", () => {
+    const list = form.querySelector("[data-order-list]");
+    Array.from(list.children).sort((a, b) => Number(a.dataset.orderUnit) - Number(b.dataset.orderUnit))
+      .forEach((row) => list.appendChild(row));
+    updateProOrderForm(form);
+  });
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const fieldset = form.querySelector("fieldset");
+    if (fieldset.disabled || form.querySelector("[data-save-order]").disabled) {
+      return;
+    }
+    const unitOrder = Array.from(form.querySelectorAll("[data-order-unit]")).map((row) => Number(row.dataset.orderUnit));
+    fieldset.disabled = true;
+    form.querySelector("[data-order-status]").textContent = "Zapisywanie…";
+    try {
+      const response = await api(`/api/projects/${projectId}/steps/${stepId}/reorder-units`, {
+        method: "POST",
+        body: JSON.stringify({ unitOrder, expectedUnits }),
+      });
+      // Do not replace a different project if the user navigated while saving.
+      if (state.selectedProject?.id === projectId) {
+        const detailsForm = els.projectDetails.querySelector("[data-pro-step-details-form]");
+        const detailsDraft = detailsForm ? formData(detailsForm) : null;
+        const detailsStepId = detailsForm?.dataset.stepId;
+        state.selectedProject = response.project;
+        renderProjectDetails();
+        const restoredForm = els.projectDetails.querySelector("[data-pro-step-details-form]");
+        if (detailsDraft && restoredForm?.dataset.stepId === detailsStepId) {
+          Object.entries(detailsDraft).forEach(([name, value]) => { restoredForm.elements.namedItem(name).value = value; });
+        }
+        const savedForm = els.projectDetails.querySelector(`[data-pro-order-form][data-step-id="${stepId}"]`);
+        if (savedForm) {
+          savedForm.closest("details").open = true;
+          savedForm.querySelector("[data-order-status]").textContent = "Kolejność zapisana.";
+        }
+      }
+    } catch (error) {
+      form.querySelector("[data-order-status]").textContent = `Nie zapisano: ${error.message || String(error)}`;
+    } finally {
+      fieldset.disabled = false;
+    }
+  });
+  updateProOrderForm(form);
 }
 
 async function deleteProDesignators(button) {
@@ -2092,6 +2176,38 @@ function selectedLineIdsForProject(project) {
   return [...state.selectedLineIds];
 }
 
+function renderProOrderEditor(step, units) {
+  if (units.length < 2) {
+    return "";
+  }
+  return `
+    <details class="pro-order-editor">
+      <summary>Zmień kolejność elementów (${units.length})</summary>
+      <p>Ustaw kolejność strzałkami ↑ / ↓ i kliknij „Zapisz kolejność”. Odcinki złożone, np. TP20+TP21+TP22, są przesuwane w całości. Zmiana dotyczy też widoku Operatora i nowo generowanego HTML.</p>
+      <form data-pro-order-form data-step-id="${step.id}">
+        <fieldset>
+          <legend>Kolejność sztuk i odcinków w linii ${step.step_no}</legend>
+          <ol class="pro-order-list" data-order-list>
+            ${units.map((unit, index) => `
+              <li data-order-unit="${unit.index}">
+                <span class="pro-order-position" data-order-position aria-hidden="true">${index + 1}.</span>
+                <span class="pro-order-label">${escapeHtml(unit.label)}</span>
+                <button type="button" data-order-direction="up" aria-label="${escapeHtml(unit.label)} — wcześniej" title="Przesuń wcześniej" ${index === 0 ? "disabled" : ""}>↑</button>
+                <button type="button" data-order-direction="down" aria-label="${escapeHtml(unit.label)} — później" title="Przesuń później" ${index === units.length - 1 ? "disabled" : ""}>↓</button>
+              </li>
+            `).join("")}
+          </ol>
+          <div class="pro-actions-row">
+            <button type="submit" class="primary" data-save-order disabled>Zapisz kolejność</button>
+            <button type="button" data-reset-order disabled>Cofnij zmiany kolejności</button>
+          </div>
+        </fieldset>
+        <p class="pro-order-status" data-order-status role="status" aria-live="polite">Kolejność zgodna z zapisem.</p>
+      </form>
+    </details>
+  `;
+}
+
 function renderLineProEditor(project) {
   const step = (project.steps || []).find((item) => Number(item.id) === Number(state.proEditorStepId));
   if (!step) {
@@ -2134,6 +2250,7 @@ function renderLineProEditor(project) {
         </label>
         <button type="submit" class="primary">Zapisz opis linii</button>
       </form>
+      ${renderProOrderEditor(step, units)}
       <div class="pro-unit-tools">
         <div>
           <strong>Sztuki / odcinki w tej linii</strong>
