@@ -29,6 +29,9 @@ class PlatformRunnerTests(unittest.TestCase):
                         ["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
                          "-File", str(runner), "-RepoPath", str(repo), "-Port", "18780"],
                         capture_output=True, text=True, timeout=30,
+                        # Both fixture variants have the same size and may be
+                        # written within one timestamp tick. Do not reuse .pyc.
+                        env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
                     )
                     self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
                     lifecycle = (repo / "logs/inserter_platform_18780.lifecycle.log").read_text(encoding="utf-8-sig")

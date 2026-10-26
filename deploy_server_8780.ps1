@@ -115,6 +115,12 @@ if (-not (Test-Path -LiteralPath $runner)) { throw "Runner script not found: $ru
 $platformTask = Register-PlatformTask -RepoPath $RepoPath -Port $Port -BindHost $BindHost `
     -PublicUrl $PublicUrl -TaskName $TaskName -TaskCredential $TaskCredential
 
+# Permission/configuration failures must not take a working app offline. IgnoreNew
+# keeps a running instance; for a stopped task this verifies an actual launch.
+Write-Host 'Checking task start and application health before restart...'
+Start-PlatformTaskChecked -Task $platformTask
+Wait-HealthCheck -LocalPort $Port
+
 # Prevent the recovery trigger from racing the deployment restart.
 $platformTask.Enabled = $false
 try {
@@ -129,7 +135,7 @@ try {
     $platformTask.Enabled = $true
 }
 Write-Host "Starting MSX THT Inserter task on ${BindHost}:${Port}"
-$platformTask.Run($null) | Out-Null
+Start-PlatformTaskChecked -Task $platformTask
 
 Wait-HealthCheck -LocalPort $Port
 

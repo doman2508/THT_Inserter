@@ -11,13 +11,17 @@ Serwer:
 - przerywa deploy, jezeli working tree na serwerze nie jest czysty,
 - konfiguruje zadanie bez limitu 72 godzin (`ExecutionTimeLimit = PT0S`),
 - ponawia uruchomienie po awarii co minute; dodatkowy wyzwalacz co minute nie wygasa i nie uruchamia drugiej kopii dzialajacej aplikacji,
-- rejestruje konfiguracje przed zatrzymaniem aplikacji (blad uprawnien nie powoduje przerwy),
+- rejestruje konfiguracje i sprawdza ACL przed zatrzymaniem aplikacji,
+- uzupelnia brakujace standardowe prawa SYSTEM i Administratorow tylko do wskazanego zadania; nie zmienia folderu Harmonogramu, innych zadan ani polityk logowania,
+- przed restartem sprawdza rzeczywisty proces zadania i odpowiedz HTTP; samo przyjecie polecenia startu nie oznacza sukcesu,
 - wylacza ponawianie na czas deploya, zatrzymuje stare zadanie i proces na porcie `8780`,
 - uruchamia aplikacje na `0.0.0.0:8780`,
 - sprawdza `http://127.0.0.1:8780/api/health`.
 
 Katalog `data\` jest ignorowany przez Git, wiec baza projektow i uploady na serwerze zostaja na serwerze.
 Kopia poprzedniej definicji zadania trafia do `data\deploy-backups\` (bez hasla).
+Przed naprawa ACL w tym samym katalogu powstaje osobna kopia `.sddl`.
+Jawne odmowy dostepu lub nieoczekiwany zakres zadania przerywaja naprawe.
 
 ## Jednorazowy autostart bez zalogowanego uzytkownika
 
@@ -46,6 +50,21 @@ Kolejne deploye zachowuja gotowe zadanie i zapisane poswiadczenia, jesli jego
 konfiguracja sie nie zmienila. Zmiana ustawien zadania w tle wymaga ponownego
 podania `-TaskCredential` przez administratora; skrypt zatrzyma sie przed restartem.
 Zmiana hasla konta wymaga tez aktualizacji poswiadczen zadania.
+Jawne podanie `-TaskCredential` zawsze odswieza zapisane poswiadczenia, takze
+gdy XML zadania sie nie zmienil. Haslo nie trafia do logow ani kopii definicji.
+
+### Start przyjety, ale proces nie powstaje
+
+Skrypt czeka do 15 sekund na dzialajace wystapienie zadania. W razie niepowodzenia
+sprawdz jako administrator dziennik `Microsoft-Windows-TaskScheduler/Operational`
+dla `\MSX THT Inserter 8780`, zapisane poswiadczenia oraz prawo logowania wsadowego.
+`LastTaskResult` moze pochodzic z poprzedniego uruchomienia, wiec nie wystarcza do diagnozy.
+Nie zmieniaj globalnych ACL ani nie uruchamiaj aplikacji jako SYSTEM.
+
+Gdy zadanie juz dziala, `IgnoreNew` zachowuje ten proces. Taki test nie potwierdza
+poprawnosci hasla do kolejnego startu. Awaryjne uruchomienie `RunEx(..., TASK_RUN_AS_SELF, ...)`
+nie jest potwierdzeniem autostartu po restarcie systemu. Deploy nie stosuje tego
+obejscia automatycznie i nie przelacza zadania na tryb interaktywny.
 
 ## Logi i kontrola
 
@@ -57,6 +76,7 @@ Zmiana hasla konta wymaga tez aktualizacji poswiadczen zadania.
 - Celowe dluzsze wylaczenie: **najpierw wylacz zadanie w Harmonogramie**, a potem
   je zatrzymaj. Samo zatrzymanie procesu uruchomi automatyczne odzyskiwanie.
 - Test konfiguracji (bez tworzenia zadan): `powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\test_platform_task.ps1`.
+- Testy naprawy ACL i kontroli startu (bez tworzenia zadan): `powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\test_platform_task_permissions.ps1`.
 - Testy aplikacji i runnera: `.\.venv\Scripts\python.exe -m unittest discover -s tests -v`.
 - Test faktycznego restartu Harmonogramu (okolo minuty, tworzy i usuwa osobne zadanie,
   nie przerywa aplikacji): `powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\test_platform_recovery.ps1`.
