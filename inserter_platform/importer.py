@@ -57,10 +57,10 @@ def parse_float(value: object) -> float | None:
     return float(match.group(0))
 
 
-# Standard designators are simple (R62, U3, J1), but some customer BOMs use
-# hierarchical names such as RP.A0.1. Keep the token strict enough to avoid notes.
-DESIGNATOR_TOKEN_RE = re.compile(r"^(?=[A-Z][A-Z0-9.']*$)(?=.*\d)[A-Z][A-Z0-9']*(?:\.[A-Z0-9']+)*$")
-PLACEMENT_TOKEN_RE = re.compile(r"^[A-Z][A-Z0-9']*(?:\.[A-Z0-9']+)*$")
+# Customer identifiers also include X-AL, X-TMP_NTC, Z_K5K6 and ZEN.
+# A separator must have a nonempty segment on either side.
+DESIGNATOR_TOKEN_RE = re.compile(r"^[A-Z][A-Z0-9']*(?:[._-][A-Z0-9']+)*$")
+PLACEMENT_TOKEN_RE = DESIGNATOR_TOKEN_RE
 
 
 def clean_designator_token(value: str) -> str:
@@ -91,7 +91,12 @@ def parse_designator_cell(value: object) -> tuple[list[str], str]:
         note_start_index: int | None = None
         for index, token in enumerate(tokens):
             clean_token = clean_designator_token(token)
-            if DESIGNATOR_TOKEN_RE.match(clean_token):
+            # Letter-only names need their own comma/semicolon chunk (ZEN,ZUX).
+            # Plain words in whitespace-separated text still introduce notes,
+            # e.g. "R1 nie montowac" / "R1 DNP", not extra components.
+            is_name = DESIGNATOR_TOKEN_RE.fullmatch(clean_token)
+            is_inline_word = len(tokens) > 1 and re.fullmatch(r"[A-Z]+", clean_token)
+            if is_name and not is_inline_word:
                 chunk_designators.append(clean_token)
                 continue
             note_start_index = index
